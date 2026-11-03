@@ -43,7 +43,7 @@ class ApiGatewayApplicationTest {
         assertThat(pathPatterns(routes.get("hotel-service")))
                 .containsExactlyInAnyOrder("/api/hotels/**", "/api/rooms/**");
         assertThat(pathPatterns(routes.get("booking-service")))
-                .containsExactlyInAnyOrder("/api/bookings/**", "/api/users/**", "/api/auth/**");
+                .containsExactlyInAnyOrder("/api/booking/**", "/api/bookings/**", "/api/user/**");
     }
 
     private List<String> pathPatterns(RouteDefinition routeDefinition) {

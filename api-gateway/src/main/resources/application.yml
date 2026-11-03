@@ -13,7 +13,7 @@ spring:
             - id: booking-service
               uri: lb://booking-service
               predicates:
-                - Path=/api/bookings/**,/api/users/**,/api/auth/**
+                - Path=/api/booking/**,/api/bookings/**,/api/user/**
 
 server:
   address: 127.0.0.1
