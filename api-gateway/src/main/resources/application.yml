@@ -9,14 +9,15 @@ spring:
             - id: hotel-service
               uri: lb://hotel-service
               predicates:
-                - Path=/api/hotels/**,/api/rooms/**
+                - Path=/api/hotels/**
             - id: booking-service
               uri: lb://booking-service
               predicates:
-                - Path=/api/booking/**,/api/bookings/**,/api/user/**
+                - Path=/api/bookings/**
+              filters:
+                - StripPrefix=2
 
 server:
-  address: 127.0.0.1
   port: 8080
 
 eureka:

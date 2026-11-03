@@ -7,6 +7,8 @@ import com.kseniia.hotelbooking.hotel.repository.HotelRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 public class HotelService {
 
@@ -19,6 +21,17 @@ public class HotelService {
     @Transactional
     public HotelResponse createHotel(CreateHotelRequest request) {
         Hotel hotel = hotelRepository.save(new Hotel(request.name(), request.address()));
+        return toResponse(hotel);
+    }
+
+    @Transactional(readOnly = true)
+    public List<HotelResponse> getHotels() {
+        return hotelRepository.findAll().stream()
+                .map(HotelService::toResponse)
+                .toList();
+    }
+
+    private static HotelResponse toResponse(Hotel hotel) {
         return new HotelResponse(hotel.getId(), hotel.getName(), hotel.getAddress());
     }
 }

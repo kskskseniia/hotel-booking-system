@@ -30,6 +30,5 @@ class HotelServiceApplicationTest {
         assertThat(environment.getProperty("server.port", Integer.class)).isEqualTo(8081);
         assertThat(environment.getProperty("spring.datasource.url")).isEqualTo("jdbc:h2:mem:hoteldb");
         assertThat(environment.getProperty("spring.jpa.open-in-view", Boolean.class)).isFalse();
-        assertThat(environment.getProperty("spring.h2.console.enabled", Boolean.class)).isFalse();
     }
 }

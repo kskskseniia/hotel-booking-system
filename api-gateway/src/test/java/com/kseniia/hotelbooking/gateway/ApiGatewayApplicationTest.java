@@ -41,9 +41,14 @@ class ApiGatewayApplicationTest {
         assertThat(routes.get("booking-service").getUri().toString()).isEqualTo("lb://booking-service");
 
         assertThat(pathPatterns(routes.get("hotel-service")))
-                .containsExactlyInAnyOrder("/api/hotels/**", "/api/rooms/**");
+                .containsExactly("/api/hotels/**");
         assertThat(pathPatterns(routes.get("booking-service")))
-                .containsExactlyInAnyOrder("/api/booking/**", "/api/bookings/**", "/api/user/**");
+                .containsExactly("/api/bookings/**");
+        assertThat(routes.get("booking-service").getFilters())
+                .anySatisfy(filter -> {
+                    assertThat(filter.getName()).isEqualTo("StripPrefix");
+                    assertThat(filter.getArgs()).containsValue("2");
+                });
     }
 
     private List<String> pathPatterns(RouteDefinition routeDefinition) {
@@ -55,8 +60,7 @@ class ApiGatewayApplicationTest {
     }
 
     @Test
-    void usesExpectedLocalEndpoint() {
-        assertThat(environment.getProperty("server.address")).isEqualTo("127.0.0.1");
+    void usesExpectedPort() {
         assertThat(environment.getProperty("server.port", Integer.class)).isEqualTo(8080);
     }
 }
