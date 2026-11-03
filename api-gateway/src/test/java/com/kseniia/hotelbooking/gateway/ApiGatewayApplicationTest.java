@@ -36,12 +36,21 @@ class ApiGatewayApplicationTest {
                 .block();
 
         assertThat(routes).isNotNull();
-        assertThat(routes).containsKeys("hotel-service", "booking-service");
+        assertThat(routes).containsOnlyKeys(
+                "hotel-service",
+                "hotel-service-create-room",
+                "booking-service"
+        );
         assertThat(routes.get("hotel-service").getUri().toString()).isEqualTo("lb://hotel-service");
+        assertThat(routes.get("hotel-service-create-room").getUri().toString()).isEqualTo("lb://hotel-service");
         assertThat(routes.get("booking-service").getUri().toString()).isEqualTo("lb://booking-service");
 
         assertThat(pathPatterns(routes.get("hotel-service")))
                 .containsExactly("/api/hotels/**");
+        assertThat(pathPatterns(routes.get("hotel-service-create-room")))
+                .containsExactly("/api/rooms");
+        assertThat(predicateValues(routes.get("hotel-service-create-room"), "Method"))
+                .containsExactly("POST");
         assertThat(pathPatterns(routes.get("booking-service")))
                 .containsExactly("/api/bookings/**");
         assertThat(routes.get("booking-service").getFilters())
@@ -52,8 +61,12 @@ class ApiGatewayApplicationTest {
     }
 
     private List<String> pathPatterns(RouteDefinition routeDefinition) {
+        return predicateValues(routeDefinition, "Path");
+    }
+
+    private List<String> predicateValues(RouteDefinition routeDefinition, String predicateName) {
         return routeDefinition.getPredicates().stream()
-                .filter(predicate -> "Path".equals(predicate.getName()))
+                .filter(predicate -> predicateName.equals(predicate.getName()))
                 .flatMap(predicate -> predicate.getArgs().values().stream())
                 .flatMap(value -> Arrays.stream(value.split(",")))
                 .toList();

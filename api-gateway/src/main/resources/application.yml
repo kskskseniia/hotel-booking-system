@@ -10,6 +10,11 @@ spring:
               uri: lb://hotel-service
               predicates:
                 - Path=/api/hotels/**
+            - id: hotel-service-create-room
+              uri: lb://hotel-service
+              predicates:
+                - Path=/api/rooms
+                - Method=POST
             - id: booking-service
               uri: lb://booking-service
               predicates:
