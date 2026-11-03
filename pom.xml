@@ -22,6 +22,7 @@
     <modules>
         <module>eureka-server</module>
         <module>api-gateway</module>
+        <module>hotel-service</module>
     </modules>
 
     <properties>
