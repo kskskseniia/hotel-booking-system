@@ -14,12 +14,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -89,6 +91,89 @@ class UserAdministrationHttpTest {
     }
 
     @Test
+    void adminChangesUserRoleOverRealHttp() throws Exception {
+        HttpHeaders headers = bearerHeaders(issueToken("admin", UserRole.ADMIN));
+        User target = userRepository.saveAndFlush(new User(
+                "role-target",
+                passwordEncoder.encode("preserved-password"),
+                UserRole.USER
+        ));
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/user",
+                HttpMethod.PATCH,
+                new HttpEntity<>(Map.of(
+                        "username", "role-target",
+                        "role", "ADMIN"
+                ), headers),
+                String.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        JsonNode responseBody = objectMapper.readTree(response.getBody());
+        assertThat(responseBody.get("id").asLong()).isEqualTo(target.getId());
+        assertThat(responseBody.get("username").asText()).isEqualTo("role-target");
+        assertThat(responseBody.get("role").asText()).isEqualTo("ADMIN");
+        assertThat(responseBody.has("password")).isFalse();
+        assertThat(responseBody.has("passwordHash")).isFalse();
+
+        User updatedUser = userRepository.findById(target.getId()).orElseThrow();
+        assertThat(updatedUser.getUsername()).isEqualTo("role-target");
+        assertThat(updatedUser.getRole()).isEqualTo(UserRole.ADMIN);
+        assertThat(passwordEncoder.matches("preserved-password", updatedUser.getPasswordHash())).isTrue();
+    }
+
+    @Test
+    void updatingMissingUserReturnsNotFoundOverRealHttp() {
+        HttpHeaders headers = bearerHeaders(issueToken("admin", UserRole.ADMIN));
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/user",
+                HttpMethod.PATCH,
+                new HttpEntity<>(Map.of(
+                        "username", "missing-user",
+                        "role", "ADMIN"
+                ), headers),
+                String.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(userRepository.findByUsername("missing-user")).isEmpty();
+    }
+
+    @Test
+    void invalidUpdateRequestsReturnBadRequestOverRealHttp() {
+        HttpHeaders headers = bearerHeaders(issueToken("admin", UserRole.ADMIN));
+        User target = userRepository.saveAndFlush(new User(
+                "validation-target",
+                passwordEncoder.encode("original-password"),
+                UserRole.USER
+        ));
+        List<Map<String, Object>> invalidRequests = List.of(
+                Map.of("username", "validation-target"),
+                Map.of("role", "ADMIN"),
+                Map.of("username", " ", "role", "ADMIN"),
+                Map.of("username", "validation-target", "role", "OWNER")
+        );
+
+        for (Map<String, Object> request : invalidRequests) {
+            ResponseEntity<String> response = restTemplate.exchange(
+                    "/user",
+                    HttpMethod.PATCH,
+                    new HttpEntity<>(request, headers),
+                    String.class
+            );
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        }
+
+        User unchangedUser = userRepository.findById(target.getId()).orElseThrow();
+        assertThat(unchangedUser.getUsername()).isEqualTo("validation-target");
+        assertThat(unchangedUser.getRole()).isEqualTo(UserRole.USER);
+        assertThat(passwordEncoder.matches("original-password", unchangedUser.getPasswordHash())).isTrue();
+    }
+
+    @Test
     void regularUserCannotCreateUserOverRealHttp() {
         String userToken = issueToken("regular-user", UserRole.USER);
         HttpHeaders headers = bearerHeaders(userToken);
@@ -105,6 +190,32 @@ class UserAdministrationHttpTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(userRepository.findByUsername("forbidden-user")).isEmpty();
+    }
+
+    @Test
+    void regularUserCannotUpdateUserOverRealHttp() {
+        HttpHeaders headers = bearerHeaders(issueToken("regular-user", UserRole.USER));
+        User target = userRepository.saveAndFlush(new User(
+                "unchanged-user",
+                passwordEncoder.encode("old-password"),
+                UserRole.USER
+        ));
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/user",
+                HttpMethod.PATCH,
+                new HttpEntity<>(Map.of(
+                        "username", "unchanged-user",
+                        "role", "ADMIN"
+                ), headers),
+                String.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        User unchangedUser = userRepository.findById(target.getId()).orElseThrow();
+        assertThat(unchangedUser.getUsername()).isEqualTo("unchanged-user");
+        assertThat(unchangedUser.getRole()).isEqualTo(UserRole.USER);
+        assertThat(passwordEncoder.matches("old-password", unchangedUser.getPasswordHash())).isTrue();
     }
 
     @Test
@@ -142,6 +253,28 @@ class UserAdministrationHttpTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(userRepository.findByUsername("unauthorized-user")).isEmpty();
+    }
+
+    @Test
+    void missingTokenCannotUpdateUserOverRealHttp() {
+        User target = userRepository.saveAndFlush(new User(
+                "unauthorized-target",
+                passwordEncoder.encode("old-password"),
+                UserRole.USER
+        ));
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/user",
+                HttpMethod.PATCH,
+                new HttpEntity<>(Map.of(
+                        "username", "unauthorized-target",
+                        "role", "ADMIN"
+                )),
+                String.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(userRepository.findById(target.getId()).orElseThrow().getRole()).isEqualTo(UserRole.USER);
     }
 
     @Test

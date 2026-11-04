@@ -1,8 +1,10 @@
 package com.kseniia.hotelbooking.booking.service;
 
 import com.kseniia.hotelbooking.booking.dto.CreateUserRequest;
+import com.kseniia.hotelbooking.booking.dto.UpdateUserRequest;
 import com.kseniia.hotelbooking.booking.dto.UserResponse;
 import com.kseniia.hotelbooking.booking.entity.User;
+import com.kseniia.hotelbooking.booking.exception.UserNotFoundException;
 import com.kseniia.hotelbooking.booking.exception.UsernameAlreadyExistsException;
 import com.kseniia.hotelbooking.booking.repository.UserRepository;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -37,6 +39,13 @@ public class UserAdministrationService {
         } catch (DataIntegrityViolationException exception) {
             throw new UsernameAlreadyExistsException();
         }
+        return new UserResponse(user.getId(), user.getUsername(), user.getRole());
+    }
+
+    @Transactional
+    public UserResponse update(UpdateUserRequest request) {
+        User user = userRepository.findByUsername(request.username()).orElseThrow(UserNotFoundException::new);
+        user.updateRole(request.role());
         return new UserResponse(user.getId(), user.getUsername(), user.getRole());
     }
 }
