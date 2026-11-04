@@ -26,6 +26,11 @@ class OpenApiDocumentationTest {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.paths['/user/register'].post").exists())
-                .andExpect(jsonPath("$.paths['/user/auth'].post").exists());
+                .andExpect(jsonPath("$.paths['/user/auth'].post").exists())
+                .andExpect(jsonPath("$.paths['/user'].post").exists())
+                .andExpect(jsonPath("$.paths['/user'].post.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/user'].post.responses['201']").exists())
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.type").value("http"))
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"));
     }
 }
