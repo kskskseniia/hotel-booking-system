@@ -34,4 +34,9 @@ public class RoomController {
     public List<RoomResponse> getAvailableRooms() {
         return roomService.getAvailableRooms();
     }
+
+    @GetMapping("/recommend")
+    public List<RoomResponse> getRecommendedRooms() {
+        return roomService.getRecommendedRooms();
+    }
 }

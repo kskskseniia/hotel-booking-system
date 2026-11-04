@@ -40,6 +40,13 @@ public class RoomService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<RoomResponse> getRecommendedRooms() {
+        return roomRepository.findAllByAvailableTrueOrderByTimesBookedAscIdAsc().stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     private RoomResponse toResponse(Room room) {
         return new RoomResponse(
                 room.getId(),

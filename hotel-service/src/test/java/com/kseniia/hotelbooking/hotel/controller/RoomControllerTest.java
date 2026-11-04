@@ -146,4 +146,32 @@ class RoomControllerTest {
                 .andExpect(jsonPath("$[0].available").value(true))
                 .andExpect(jsonPath("$[0].timesBooked").value(0));
     }
+
+    @Test
+    void recommendsAvailableRoomsByTimesBookedThenId() throws Exception {
+        Hotel hotel = hotelRepository.save(new Hotel("Aurora", "1 Central Street"));
+        jdbcTemplate.update("""
+                INSERT INTO rooms (hotel_id, number, available, times_booked)
+                VALUES (?, ?, ?, ?)
+                """, hotel.getId(), "301", true, 2L);
+        jdbcTemplate.update("""
+                INSERT INTO rooms (hotel_id, number, available, times_booked)
+                VALUES (?, ?, ?, ?)
+                """, hotel.getId(), "302", true, 0L);
+        jdbcTemplate.update("""
+                INSERT INTO rooms (hotel_id, number, available, times_booked)
+                VALUES (?, ?, ?, ?)
+                """, hotel.getId(), "303", true, 0L);
+        jdbcTemplate.update("""
+                INSERT INTO rooms (hotel_id, number, available, times_booked)
+                VALUES (?, ?, ?, ?)
+                """, hotel.getId(), "304", false, 0L);
+
+        mockMvc.perform(get("/api/rooms/recommend"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(3))
+                .andExpect(jsonPath("$[0].number").value("302"))
+                .andExpect(jsonPath("$[1].number").value("303"))
+                .andExpect(jsonPath("$[2].number").value("301"));
+    }
 }
