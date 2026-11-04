@@ -11,7 +11,8 @@ import static org.assertj.core.api.Assertions.assertThat;
         classes = BookingServiceApplication.class,
         properties = {
                 "eureka.client.enabled=false",
-                "spring.cloud.discovery.enabled=false"
+                "spring.cloud.discovery.enabled=false",
+                "jwt.secret=test-only-jwt-secret-32-bytes-minimum!"
         }
 )
 class BookingServiceApplicationTest {
