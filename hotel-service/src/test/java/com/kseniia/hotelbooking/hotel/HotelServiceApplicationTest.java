@@ -11,7 +11,8 @@ import static org.assertj.core.api.Assertions.assertThat;
         classes = HotelServiceApplication.class,
         properties = {
                 "eureka.client.enabled=false",
-                "spring.cloud.discovery.enabled=false"
+                "spring.cloud.discovery.enabled=false",
+                "jwt.secret=hotel-security-test-secret-at-least-32-bytes"
         }
 )
 class HotelServiceApplicationTest {

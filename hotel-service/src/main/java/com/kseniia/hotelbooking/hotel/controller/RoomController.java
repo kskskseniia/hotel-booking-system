@@ -6,6 +6,7 @@ import com.kseniia.hotelbooking.hotel.service.RoomService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -25,17 +26,20 @@ public class RoomController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<RoomResponse> createRoom(@Valid @RequestBody CreateRoomRequest request) {
         RoomResponse room = roomService.createRoom(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(room);
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     public List<RoomResponse> getAvailableRooms() {
         return roomService.getAvailableRooms();
     }
 
     @GetMapping("/recommend")
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     public List<RoomResponse> getRecommendedRooms() {
         return roomService.getRecommendedRooms();
     }

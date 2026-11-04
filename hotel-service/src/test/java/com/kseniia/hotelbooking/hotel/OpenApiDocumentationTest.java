@@ -14,7 +14,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         classes = HotelServiceApplication.class,
         properties = {
                 "eureka.client.enabled=false",
-                "spring.cloud.discovery.enabled=false"
+                "spring.cloud.discovery.enabled=false",
+                "jwt.secret=hotel-security-test-secret-at-least-32-bytes"
         }
 )
 @AutoConfigureMockMvc
@@ -31,6 +32,9 @@ class OpenApiDocumentationTest {
                 .andExpect(jsonPath("$.paths['/api/hotels'].post").exists())
                 .andExpect(jsonPath("$.paths['/api/rooms'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/rooms/recommend'].get").exists())
-                .andExpect(jsonPath("$.paths['/api/rooms'].post").exists());
+                .andExpect(jsonPath("$.paths['/api/rooms'].post").exists())
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.type").value("http"))
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"))
+                .andExpect(jsonPath("$.security[0].bearerAuth").isArray());
     }
 }

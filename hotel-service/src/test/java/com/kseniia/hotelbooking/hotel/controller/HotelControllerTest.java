@@ -8,10 +8,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -19,7 +22,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = {
         "eureka.client.enabled=false",
-        "spring.cloud.discovery.enabled=false"
+        "spring.cloud.discovery.enabled=false",
+        "jwt.secret=hotel-security-test-secret-at-least-32-bytes"
 })
 @AutoConfigureMockMvc
 class HotelControllerTest {
@@ -38,6 +42,7 @@ class HotelControllerTest {
     @Test
     void createsHotel() throws Exception {
         mockMvc.perform(post("/api/hotels")
+                        .with(admin())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -62,6 +67,7 @@ class HotelControllerTest {
         String longAddress = "A".repeat(300);
 
         mockMvc.perform(post("/api/hotels")
+                        .with(admin())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -83,6 +89,7 @@ class HotelControllerTest {
     @Test
     void rejectsBlankHotelFields() throws Exception {
         mockMvc.perform(post("/api/hotels")
+                        .with(admin())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -100,12 +107,20 @@ class HotelControllerTest {
         Hotel aurora = hotelRepository.save(new Hotel("Aurora", "1 Central Street"));
         Hotel baltic = hotelRepository.save(new Hotel("Baltic", "2 River Road"));
 
-        mockMvc.perform(get("/api/hotels"))
+        mockMvc.perform(get("/api/hotels").with(user()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[?(@.id == %d && @.name == 'Aurora' && @.address == '1 Central Street')]"
                         .formatted(aurora.getId()), hasSize(1)))
                 .andExpect(jsonPath("$[?(@.id == %d && @.name == 'Baltic' && @.address == '2 River Road')]"
                         .formatted(baltic.getId()), hasSize(1)));
+    }
+
+    private RequestPostProcessor admin() {
+        return jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"));
+    }
+
+    private RequestPostProcessor user() {
+        return jwt().authorities(new SimpleGrantedAuthority("ROLE_USER"));
     }
 }

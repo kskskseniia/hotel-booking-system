@@ -9,11 +9,14 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -21,7 +24,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = {
         "eureka.client.enabled=false",
-        "spring.cloud.discovery.enabled=false"
+        "spring.cloud.discovery.enabled=false",
+        "jwt.secret=hotel-security-test-secret-at-least-32-bytes"
 })
 @AutoConfigureMockMvc
 class RoomControllerTest {
@@ -53,6 +57,7 @@ class RoomControllerTest {
         Hotel hotel = hotelRepository.save(new Hotel("Aurora", "1 Central Street"));
 
         mockMvc.perform(post("/api/rooms")
+                        .with(admin())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -80,6 +85,7 @@ class RoomControllerTest {
     @Test
     void rejectsUnknownHotel() throws Exception {
         mockMvc.perform(post("/api/rooms")
+                        .with(admin())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -98,6 +104,7 @@ class RoomControllerTest {
         Hotel hotel = hotelRepository.save(new Hotel("Aurora", "1 Central Street"));
 
         mockMvc.perform(post("/api/rooms")
+                        .with(admin())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -114,6 +121,7 @@ class RoomControllerTest {
     @Test
     void rejectsMissingHotelId() throws Exception {
         mockMvc.perform(post("/api/rooms")
+                        .with(admin())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -138,7 +146,7 @@ class RoomControllerTest {
                 VALUES (?, ?, ?, ?)
                 """, hotel.getId(), "102", false, 3L);
 
-        mockMvc.perform(get("/api/rooms"))
+        mockMvc.perform(get("/api/rooms").with(user()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].hotelId").value(hotel.getId()))
@@ -167,11 +175,19 @@ class RoomControllerTest {
                 VALUES (?, ?, ?, ?)
                 """, hotel.getId(), "304", false, 0L);
 
-        mockMvc.perform(get("/api/rooms/recommend"))
+        mockMvc.perform(get("/api/rooms/recommend").with(user()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(3))
                 .andExpect(jsonPath("$[0].number").value("302"))
                 .andExpect(jsonPath("$[1].number").value("303"))
                 .andExpect(jsonPath("$[2].number").value("301"));
+    }
+
+    private RequestPostProcessor admin() {
+        return jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"));
+    }
+
+    private RequestPostProcessor user() {
+        return jwt().authorities(new SimpleGrantedAuthority("ROLE_USER"));
     }
 }
