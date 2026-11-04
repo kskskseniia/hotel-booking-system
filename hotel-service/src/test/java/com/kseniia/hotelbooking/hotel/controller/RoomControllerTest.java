@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -123,5 +124,26 @@ class RoomControllerTest {
 
         Long roomCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM rooms", Long.class);
         assertThat(roomCount).isZero();
+    }
+
+    @Test
+    void returnsOnlyAvailableRooms() throws Exception {
+        Hotel hotel = hotelRepository.save(new Hotel("Aurora", "1 Central Street"));
+        jdbcTemplate.update("""
+                INSERT INTO rooms (hotel_id, number, available, times_booked)
+                VALUES (?, ?, ?, ?)
+                """, hotel.getId(), "101", true, 0L);
+        jdbcTemplate.update("""
+                INSERT INTO rooms (hotel_id, number, available, times_booked)
+                VALUES (?, ?, ?, ?)
+                """, hotel.getId(), "102", false, 3L);
+
+        mockMvc.perform(get("/api/rooms"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].hotelId").value(hotel.getId()))
+                .andExpect(jsonPath("$[0].number").value("101"))
+                .andExpect(jsonPath("$[0].available").value(true))
+                .andExpect(jsonPath("$[0].timesBooked").value(0));
     }
 }

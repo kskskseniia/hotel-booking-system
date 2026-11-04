@@ -15,6 +15,11 @@ spring:
               predicates:
                 - Path=/api/rooms
                 - Method=POST
+            - id: hotel-service-list-rooms
+              uri: lb://hotel-service
+              predicates:
+                - Path=/api/rooms
+                - Method=GET
             - id: booking-service
               uri: lb://booking-service
               predicates:

@@ -10,6 +10,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
+
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 @Service
@@ -28,6 +30,17 @@ public class RoomService {
         Hotel hotel = hotelRepository.findById(request.hotelId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Hotel not found"));
         Room room = roomRepository.save(new Room(hotel, request.number()));
+        return toResponse(room);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RoomResponse> getAvailableRooms() {
+        return roomRepository.findAllByAvailableTrue().stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    private RoomResponse toResponse(Room room) {
         return new RoomResponse(
                 room.getId(),
                 room.getHotel().getId(),
