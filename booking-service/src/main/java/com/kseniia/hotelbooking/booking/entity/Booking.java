@@ -91,14 +91,22 @@ public class Booking {
     }
 
     public void confirm() {
+        requirePending();
         status = BookingStatus.CONFIRMED;
     }
 
     public void assignRoom(Long roomId) {
+        requirePending();
         this.roomId = roomId;
     }
 
     public void cancel() {
         status = BookingStatus.CANCELLED;
+    }
+
+    private void requirePending() {
+        if (status != BookingStatus.PENDING) {
+            throw new IllegalStateException("Booking is no longer pending");
+        }
     }
 }

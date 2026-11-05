@@ -45,27 +45,29 @@ public class BookingStateService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public BookingResponse confirm(Long bookingId) {
-        Booking booking = find(bookingId);
+        Booking booking = findForUpdate(bookingId);
         booking.confirm();
         return toResponse(booking);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public BookingResponse assignRoom(Long bookingId, Long roomId) {
-        Booking booking = find(bookingId);
+        Booking booking = findForUpdate(bookingId);
         booking.assignRoom(roomId);
         return toResponse(booking);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void cancel(Long bookingId) {
-        find(bookingId).cancel();
+        findForUpdate(bookingId).cancel();
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void cancel(Long bookingId, Long userId) {
-        Booking booking = bookingRepository.findByIdAndUser_Id(bookingId, userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
+        Booking booking = findForUpdate(bookingId);
+        if (!booking.getUser().getId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found");
+        }
         booking.cancel();
     }
 
@@ -90,8 +92,8 @@ public class BookingStateService {
                 .toList();
     }
 
-    private Booking find(Long bookingId) {
-        return bookingRepository.findById(bookingId)
+    private Booking findForUpdate(Long bookingId) {
+        return bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
     }
 

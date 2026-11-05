@@ -102,8 +102,18 @@ public class RoomService {
 
     @Transactional
     public void release(Long roomId, ReleaseRoomRequest request) {
-        Room room = roomRepository.findByIdForUpdate(roomId)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Room not found"));
+        Room room = roomRepository.findByIdForUpdate(roomId).orElse(null);
+        if (room == null) {
+            RoomHold hold = roomHoldRepository.findByBookingId(request.bookingId()).orElse(null);
+            if (hold == null) {
+                return;
+            }
+            if (!hold.getRoom().getId().equals(roomId)) {
+                throw new ResponseStatusException(CONFLICT, "Booking holds a different room");
+            }
+            throw new ResponseStatusException(NOT_FOUND, "Room not found");
+        }
+
         RoomHold hold = roomHoldRepository.findByBookingId(request.bookingId()).orElse(null);
         if (hold == null) {
             return;

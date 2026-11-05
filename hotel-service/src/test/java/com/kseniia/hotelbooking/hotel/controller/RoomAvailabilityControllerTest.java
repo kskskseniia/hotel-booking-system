@@ -13,14 +13,18 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -44,6 +48,9 @@ class RoomAvailabilityControllerTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @BeforeEach
     void clearData() {
@@ -141,6 +148,19 @@ class RoomAvailabilityControllerTest {
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM room_holds", Long.class)).isZero();
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT times_booked FROM rooms WHERE id = ?", Long.class, room.getId())).isZero();
+    }
+
+    @Test
+    void releasesMissingHoldForUnknownRoomIdempotently() throws Exception {
+        mockMvc.perform(post("/api/rooms/{id}/release", 999999)
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_SERVICE")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "bookingId": 1001
+                                }
+                                """))
+                .andExpect(status().isNoContent());
     }
 
     @Test
@@ -251,6 +271,48 @@ class RoomAvailabilityControllerTest {
         }
     }
 
+    @Test
+    void releaseWaitsForInFlightConfirmationAndRemovesItsHold() throws Exception {
+        Room room = createRoom();
+        long bookingId = 1001L;
+        CountDownLatch roomLocked = new CountDownLatch(1);
+        CountDownLatch allowConfirmationCommit = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+
+        try {
+            Future<?> confirmation = executor.submit(() -> transaction.executeWithoutResult(status -> {
+                jdbcTemplate.queryForObject(
+                        "SELECT id FROM rooms WHERE id = ? FOR UPDATE", Long.class, room.getId());
+                roomLocked.countDown();
+                await(allowConfirmationCommit);
+                jdbcTemplate.update(
+                        "INSERT INTO room_holds (booking_id, room_id, start_date, end_date) VALUES (?, ?, ?, ?)",
+                        bookingId, room.getId(), "2099-08-01", "2099-08-05");
+                jdbcTemplate.update(
+                        "UPDATE rooms SET times_booked = times_booked + 1 WHERE id = ?", room.getId());
+            }));
+            assertThat(roomLocked.await(5, TimeUnit.SECONDS)).isTrue();
+            Future<Integer> release = executor.submit(() -> this.release(room, bookingId)
+                    .andReturn()
+                    .getResponse()
+                    .getStatus());
+
+            assertThatThrownBy(() -> release.get(300, TimeUnit.MILLISECONDS))
+                    .isInstanceOf(TimeoutException.class);
+            allowConfirmationCommit.countDown();
+
+            confirmation.get(5, TimeUnit.SECONDS);
+            assertThat(release.get(5, TimeUnit.SECONDS)).isEqualTo(204);
+            assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM room_holds", Long.class)).isZero();
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT times_booked FROM rooms WHERE id = ?", Long.class, room.getId())).isZero();
+        } finally {
+            allowConfirmationCommit.countDown();
+            executor.shutdownNow();
+        }
+    }
+
     private int concurrentConfirmation(
             Room room,
             long bookingId,
@@ -310,6 +372,15 @@ class RoomAvailabilityControllerTest {
                           "bookingId": %d
                         }
                         """.formatted(bookingId)));
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            latch.await();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(exception);
+        }
     }
 
     private Room createRoom() {

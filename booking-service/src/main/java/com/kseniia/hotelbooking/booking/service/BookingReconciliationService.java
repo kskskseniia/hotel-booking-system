@@ -1,6 +1,5 @@
 package com.kseniia.hotelbooking.booking.service;
 
-import com.kseniia.hotelbooking.booking.client.HotelClient;
 import com.kseniia.hotelbooking.booking.entity.Booking;
 import com.kseniia.hotelbooking.booking.entity.BookingStatus;
 import com.kseniia.hotelbooking.booking.repository.BookingRepository;
@@ -19,19 +18,16 @@ public class BookingReconciliationService {
     private static final Logger LOGGER = LoggerFactory.getLogger(BookingReconciliationService.class);
 
     private final BookingRepository bookingRepository;
-    private final BookingStateService bookingStateService;
-    private final HotelClient hotelClient;
+    private final BookingReconciliationWorker reconciliationWorker;
     private final Duration pendingTimeout;
 
     public BookingReconciliationService(
             BookingRepository bookingRepository,
-            BookingStateService bookingStateService,
-            HotelClient hotelClient,
+            BookingReconciliationWorker reconciliationWorker,
             @Value("${booking.pending-timeout:PT1M}") Duration pendingTimeout
     ) {
         this.bookingRepository = bookingRepository;
-        this.bookingStateService = bookingStateService;
-        this.hotelClient = hotelClient;
+        this.reconciliationWorker = reconciliationWorker;
         this.pendingTimeout = pendingTimeout;
     }
 
@@ -47,9 +43,9 @@ public class BookingReconciliationService {
 
     private void reconcile(Booking booking) {
         try {
-            hotelClient.release(booking.getRoomId(), booking.getId(), "");
-            bookingStateService.cancel(booking.getId());
-            LOGGER.info("Reconciled pending booking {} to CANCELLED", booking.getId());
+            if (reconciliationWorker.releaseAndCancelPending(booking.getId())) {
+                LOGGER.info("Reconciled pending booking {} to CANCELLED", booking.getId());
+            }
         } catch (RuntimeException exception) {
             LOGGER.error("Failed to reconcile pending booking {}", booking.getId(), exception);
         }
