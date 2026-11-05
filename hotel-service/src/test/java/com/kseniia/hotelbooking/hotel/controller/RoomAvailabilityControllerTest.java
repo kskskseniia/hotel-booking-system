@@ -64,7 +64,7 @@ class RoomAvailabilityControllerTest {
         Room room = createRoom();
 
         mockMvc.perform(post("/api/rooms/{id}/confirm-availability", room.getId())
-                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_USER")))
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_SERVICE")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -95,7 +95,7 @@ class RoomAvailabilityControllerTest {
 
         for (int attempt = 0; attempt < 2; attempt++) {
             mockMvc.perform(post("/api/rooms/{id}/confirm-availability", room.getId())
-                            .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_USER")))
+                            .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_SERVICE")))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(request))
                     .andExpect(status().isNoContent());
@@ -128,7 +128,7 @@ class RoomAvailabilityControllerTest {
 
         for (int attempt = 0; attempt < 2; attempt++) {
             mockMvc.perform(post("/api/rooms/{id}/release", room.getId())
-                            .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_USER")))
+                            .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_SERVICE")))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {
@@ -154,7 +154,7 @@ class RoomAvailabilityControllerTest {
     @Test
     void rejectsUnknownRoom() throws Exception {
         mockMvc.perform(post("/api/rooms/{id}/confirm-availability", 999999)
-                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_USER")))
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_SERVICE")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -183,6 +183,23 @@ class RoomAvailabilityControllerTest {
     }
 
     @Test
+    void rejectsUserConfirmation() throws Exception {
+        Room room = createRoom();
+
+        mockMvc.perform(post("/api/rooms/{id}/confirm-availability", room.getId())
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_USER")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "bookingId": 1001,
+                                  "startDate": "2099-06-01",
+                                  "endDate": "2099-06-05"
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void allowsOnlyOneOfTwoConcurrentOverlappingHolds() throws Exception {
         Room room = createRoom();
         ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -207,6 +224,33 @@ class RoomAvailabilityControllerTest {
         }
     }
 
+    @Test
+    void concurrentRepeatedReleaseDecrementsCounterOnlyOnce() throws Exception {
+        Room room = createRoom();
+        confirm(room, 1001, "2099-06-01", "2099-06-05").andExpect(status().isNoContent());
+        confirm(room, 1002, "2099-06-10", "2099-06-15").andExpect(status().isNoContent());
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try {
+            Future<Integer> first = executor.submit(() -> concurrentRelease(room, 1001, ready, start));
+            Future<Integer> second = executor.submit(() -> concurrentRelease(room, 1001, ready, start));
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            assertThat(new int[]{
+                    first.get(10, TimeUnit.SECONDS),
+                    second.get(10, TimeUnit.SECONDS)
+            }).containsOnly(204);
+            assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM room_holds", Long.class)).isEqualTo(1L);
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT times_booked FROM rooms WHERE id = ?", Long.class, room.getId())).isEqualTo(1L);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
     private int concurrentConfirmation(
             Room room,
             long bookingId,
@@ -223,6 +267,22 @@ class RoomAvailabilityControllerTest {
                 .getStatus();
     }
 
+    private int concurrentRelease(
+            Room room,
+            long bookingId,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) throws Exception {
+        ready.countDown();
+        if (!start.await(5, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Concurrent release did not start in time");
+        }
+        return release(room, bookingId)
+                .andReturn()
+                .getResponse()
+                .getStatus();
+    }
+
     private org.springframework.test.web.servlet.ResultActions confirm(
             Room room,
             long bookingId,
@@ -230,7 +290,7 @@ class RoomAvailabilityControllerTest {
             String endDate
     ) throws Exception {
         return mockMvc.perform(post("/api/rooms/{id}/confirm-availability", room.getId())
-                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_USER")))
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_SERVICE")))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {
@@ -239,6 +299,17 @@ class RoomAvailabilityControllerTest {
                           "endDate": "%s"
                         }
                         """.formatted(bookingId, startDate, endDate)));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions release(Room room, long bookingId) throws Exception {
+        return mockMvc.perform(post("/api/rooms/{id}/release", room.getId())
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_SERVICE")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "bookingId": %d
+                        }
+                        """.formatted(bookingId)));
     }
 
     private Room createRoom() {

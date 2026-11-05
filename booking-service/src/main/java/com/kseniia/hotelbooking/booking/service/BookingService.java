@@ -33,32 +33,81 @@ public class BookingService {
             String authorization
     ) {
         validate(request);
-        Long roomId = request.autoSelect()
-                ? selectRecommendedRoom(authorization)
-                : request.roomId();
+        List<Long> roomIds = request.autoSelect()
+                ? recommendedRoomIds(authorization)
+                : List.of(request.roomId());
         BookingResponse pending = bookingStateService.createPending(
                 userId,
-                roomId,
+                roomIds.getFirst(),
                 request.startDate(),
                 request.endDate()
         );
 
+        if (request.autoSelect()) {
+            return confirmFirstAvailable(pending.id(), roomIds, request, authorization);
+        }
+        return confirmSelectedRoom(pending.id(), roomIds.getFirst(), request, authorization);
+    }
+
+    private BookingResponse confirmFirstAvailable(
+            Long bookingId,
+            List<Long> roomIds,
+            CreateBookingRequest request,
+            String authorization
+    ) {
+        for (Long roomId : roomIds) {
+            bookingStateService.assignRoom(bookingId, roomId);
+            try {
+                return confirm(bookingId, roomId, request, authorization);
+            } catch (RoomUnavailableException exception) {
+                LOGGER.info("Room {} is unavailable for booking {}, trying next candidate", roomId, bookingId);
+            } catch (RuntimeException exception) {
+                handleFailure(roomId, bookingId, authorization);
+                throw exception;
+            }
+        }
+        bookingStateService.cancel(bookingId);
+        throw new RoomUnavailableException();
+    }
+
+    private BookingResponse confirmSelectedRoom(
+            Long bookingId,
+            Long roomId,
+            CreateBookingRequest request,
+            String authorization
+    ) {
         try {
-            hotelClient.confirmAvailability(
-                    roomId,
-                    pending.id(),
-                    request.startDate(),
-                    request.endDate(),
-                    authorization
-            );
-            BookingResponse confirmed = bookingStateService.confirm(pending.id());
-            LOGGER.info("Booking {} transitioned PENDING -> CONFIRMED", pending.id());
-            return confirmed;
+            return confirm(bookingId, roomId, request, authorization);
         } catch (RuntimeException exception) {
-            compensate(roomId, pending.id(), authorization);
-            bookingStateService.cancel(pending.id());
-            LOGGER.warn("Booking {} transitioned PENDING -> CANCELLED", pending.id());
+            handleFailure(roomId, bookingId, authorization);
             throw exception;
+        }
+    }
+
+    private BookingResponse confirm(
+            Long bookingId,
+            Long roomId,
+            CreateBookingRequest request,
+            String authorization
+    ) {
+        hotelClient.confirmAvailability(
+                roomId,
+                bookingId,
+                request.startDate(),
+                request.endDate(),
+                authorization
+        );
+        BookingResponse confirmed = bookingStateService.confirm(bookingId);
+        LOGGER.info("Booking {} transitioned PENDING -> CONFIRMED", bookingId);
+        return confirmed;
+    }
+
+    private void handleFailure(Long roomId, Long bookingId, String authorization) {
+        if (compensate(roomId, bookingId, authorization)) {
+            bookingStateService.cancel(bookingId);
+            LOGGER.warn("Booking {} transitioned PENDING -> CANCELLED", bookingId);
+        } else {
+            LOGGER.error("Booking {} remains PENDING for compensation retry", bookingId);
         }
     }
 
@@ -79,20 +128,26 @@ public class BookingService {
         }
     }
 
-    private Long selectRecommendedRoom(String authorization) {
-        return hotelClient.getRecommendedRooms(authorization).stream()
+    private List<Long> recommendedRoomIds(String authorization) {
+        List<Long> roomIds = hotelClient.getRecommendedRooms(authorization).stream()
                 .map(RoomCandidate::id)
                 .filter(java.util.Objects::nonNull)
-                .findFirst()
-                .orElseThrow(RoomUnavailableException::new);
+                .distinct()
+                .toList();
+        if (roomIds.isEmpty()) {
+            throw new RoomUnavailableException();
+        }
+        return roomIds;
     }
 
-    private void compensate(Long roomId, Long bookingId, String authorization) {
+    private boolean compensate(Long roomId, Long bookingId, String authorization) {
         try {
             hotelClient.release(roomId, bookingId, authorization);
             LOGGER.info("Released room hold for booking {}", bookingId);
+            return true;
         } catch (RuntimeException compensationFailure) {
             LOGGER.error("Failed to release room hold for booking {}", bookingId, compensationFailure);
+            return false;
         }
     }
 }

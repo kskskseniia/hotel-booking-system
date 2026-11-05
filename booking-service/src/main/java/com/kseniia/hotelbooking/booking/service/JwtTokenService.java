@@ -39,4 +39,17 @@ public class JwtTokenService {
         String token = jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
         return new TokenResponse(token, expiresAt);
     }
+
+    public String issueServiceToken() {
+        Instant issuedAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer("booking-service")
+                .issuedAt(issuedAt)
+                .expiresAt(issuedAt.plus(TOKEN_LIFETIME))
+                .subject("booking-service")
+                .claim("role", "SERVICE")
+                .build();
+        return jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+    }
 }

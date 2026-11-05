@@ -2,6 +2,7 @@ package com.kseniia.hotelbooking.booking.client;
 
 import com.kseniia.hotelbooking.booking.exception.HotelServiceUnavailableException;
 import com.kseniia.hotelbooking.booking.exception.RoomUnavailableException;
+import com.kseniia.hotelbooking.booking.service.JwtTokenService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -22,16 +23,19 @@ public class RestHotelClient implements HotelClient {
     private final RestClient restClient;
     private final int maxAttempts;
     private final Duration retryBackoff;
+    private final JwtTokenService jwtTokenService;
 
     public RestHotelClient(
             RestClient.Builder hotelRestClientBuilder,
             @Value("${hotel-service.base-url:http://hotel-service}") String baseUrl,
             @Value("${hotel-service.max-attempts:3}") int maxAttempts,
-            @Value("${hotel-service.retry-backoff:100ms}") Duration retryBackoff
+            @Value("${hotel-service.retry-backoff:100ms}") Duration retryBackoff,
+            JwtTokenService jwtTokenService
     ) {
         this.restClient = hotelRestClientBuilder.baseUrl(baseUrl).build();
         this.maxAttempts = maxAttempts;
         this.retryBackoff = retryBackoff;
+        this.jwtTokenService = jwtTokenService;
     }
 
     @Override
@@ -55,7 +59,7 @@ public class RestHotelClient implements HotelClient {
         execute(() -> {
             restClient.post()
                     .uri("/api/rooms/{roomId}/confirm-availability", roomId)
-                    .header(HttpHeaders.AUTHORIZATION, authorization)
+                    .header(HttpHeaders.AUTHORIZATION, serviceAuthorization())
                     .body(new ConfirmAvailabilityRequest(
                             bookingId,
                             startDate.toString(),
@@ -72,7 +76,7 @@ public class RestHotelClient implements HotelClient {
         execute(() -> {
             restClient.post()
                     .uri("/api/rooms/{roomId}/release", roomId)
-                    .header(HttpHeaders.AUTHORIZATION, authorization)
+                    .header(HttpHeaders.AUTHORIZATION, serviceAuthorization())
                     .body(new ReleaseRoomRequest(bookingId))
                     .retrieve()
                     .toBodilessEntity();
@@ -102,6 +106,10 @@ public class RestHotelClient implements HotelClient {
             }
         }
         throw new HotelServiceUnavailableException(lastFailure);
+    }
+
+    private String serviceAuthorization() {
+        return "Bearer " + jwtTokenService.issueServiceToken();
     }
 
     private void pause(int attempt) {

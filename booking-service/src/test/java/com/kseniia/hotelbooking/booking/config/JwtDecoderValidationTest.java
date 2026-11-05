@@ -1,5 +1,6 @@
 package com.kseniia.hotelbooking.booking.config;
 
+import com.kseniia.hotelbooking.booking.service.JwtTokenService;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.MACSigner;
@@ -32,12 +33,27 @@ class JwtDecoderValidationTest {
     @Autowired
     private JwtDecoder jwtDecoder;
 
+    @Autowired
+    private JwtTokenService jwtTokenService;
+
     @Test
     void acceptsCompleteBookingServiceToken() throws Exception {
         String token = token("booking-service", "alice", 1L, "USER", Instant.now(), 3_600);
 
         assertThatCode(() -> jwtDecoder.decode(token)).doesNotThrowAnyException();
         assertThat(jwtDecoder.decode(token).getSubject()).isEqualTo("alice");
+    }
+
+    @Test
+    void issuesServiceTokenForHotelOperations() throws Exception {
+        String token = jwtTokenService.issueServiceToken();
+
+        JWTClaimsSet claims = SignedJWT.parse(token).getJWTClaimsSet();
+        assertThat(claims.getSubject()).isEqualTo("booking-service");
+        assertThat(claims.getStringClaim("role")).isEqualTo("SERVICE");
+        assertThat(claims.getClaim("userId")).isNull();
+        assertThat(claims.getExpirationTime().toInstant())
+                .isEqualTo(claims.getIssueTime().toInstant().plusSeconds(3_600));
     }
 
     @Test

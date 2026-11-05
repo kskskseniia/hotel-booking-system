@@ -50,7 +50,7 @@ public class RoomController {
 
     @PostMapping("/{id}/confirm-availability")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @PreAuthorize("hasRole('SERVICE')")
     public void confirmAvailability(
             @PathVariable Long id,
             @Valid @RequestBody ConfirmRoomAvailabilityRequest request
@@ -60,7 +60,7 @@ public class RoomController {
 
     @PostMapping("/{id}/release")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @PreAuthorize("hasRole('SERVICE')")
     public void release(
             @PathVariable Long id,
             @Valid @RequestBody ReleaseRoomRequest request

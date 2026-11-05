@@ -7,6 +7,7 @@ import com.kseniia.hotelbooking.booking.entity.Booking;
 import com.kseniia.hotelbooking.booking.entity.BookingStatus;
 import com.kseniia.hotelbooking.booking.entity.User;
 import com.kseniia.hotelbooking.booking.entity.UserRole;
+import com.kseniia.hotelbooking.booking.exception.HotelServiceUnavailableException;
 import com.kseniia.hotelbooking.booking.exception.RoomUnavailableException;
 import com.kseniia.hotelbooking.booking.repository.BookingRepository;
 import com.kseniia.hotelbooking.booking.repository.UserRepository;
@@ -127,6 +128,24 @@ class BookingControllerTest {
     }
 
     @Test
+    void keepsBookingPendingWhenCompensatingReleaseFails() throws Exception {
+        String authorization = bearer(user);
+        HotelServiceUnavailableException failure = new HotelServiceUnavailableException(new RuntimeException("down"));
+        doThrow(failure).when(hotelClient)
+                .confirmAvailability(eq(42L), any(), eq(START_DATE), eq(END_DATE), any());
+        doThrow(failure).when(hotelClient).release(eq(42L), any(), any());
+
+        mockMvc.perform(post("/booking")
+                        .header(AUTHORIZATION, authorization)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request(false, 42L)))
+                .andExpect(status().isServiceUnavailable());
+
+        Booking booking = bookingRepository.findAll().getFirst();
+        assertThat(booking.getStatus()).isEqualTo(BookingStatus.PENDING);
+    }
+
+    @Test
     void autoSelectsRecommendedRoomAndIgnoresRequestRoomId() throws Exception {
         String authorization = bearer(user);
         when(hotelClient.getRecommendedRooms(authorization))
@@ -149,6 +168,30 @@ class BookingControllerTest {
                 authorization
         );
         verify(hotelClient, never()).confirmAvailability(eq(999L), any(), any(), any(), any());
+    }
+
+    @Test
+    void autoSelectTriesNextRecommendedRoomAfterConflict() throws Exception {
+        String authorization = bearer(user);
+        when(hotelClient.getRecommendedRooms(authorization))
+                .thenReturn(List.of(new RoomCandidate(7L), new RoomCandidate(8L)));
+        doThrow(new RoomUnavailableException())
+                .when(hotelClient)
+                .confirmAvailability(eq(7L), any(), eq(START_DATE), eq(END_DATE), any());
+
+        mockMvc.perform(post("/booking")
+                        .header(AUTHORIZATION, authorization)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request(true, null)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.roomId").value(8))
+                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+
+        Booking booking = bookingRepository.findAll().getFirst();
+        assertThat(booking.getRoomId()).isEqualTo(8L);
+        verify(hotelClient).confirmAvailability(7L, booking.getId(), START_DATE, END_DATE, authorization);
+        verify(hotelClient).confirmAvailability(8L, booking.getId(), START_DATE, END_DATE, authorization);
+        verify(hotelClient, never()).release(eq(7L), any(), any());
     }
 
     @Test

@@ -51,6 +51,13 @@ public class BookingStateService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public BookingResponse assignRoom(Long bookingId, Long roomId) {
+        Booking booking = find(bookingId);
+        booking.assignRoom(roomId);
+        return toResponse(booking);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void cancel(Long bookingId) {
         find(bookingId).cancel();
     }

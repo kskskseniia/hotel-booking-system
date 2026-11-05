@@ -94,6 +94,10 @@ public class Booking {
         status = BookingStatus.CONFIRMED;
     }
 
+    public void assignRoom(Long roomId) {
+        this.roomId = roomId;
+    }
+
     public void cancel() {
         status = BookingStatus.CANCELLED;
     }

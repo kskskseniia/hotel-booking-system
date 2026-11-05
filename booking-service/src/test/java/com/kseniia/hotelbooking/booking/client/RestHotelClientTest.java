@@ -2,6 +2,7 @@ package com.kseniia.hotelbooking.booking.client;
 
 import com.kseniia.hotelbooking.booking.exception.HotelServiceUnavailableException;
 import com.kseniia.hotelbooking.booking.exception.RoomUnavailableException;
+import com.kseniia.hotelbooking.booking.service.JwtTokenService;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
@@ -20,6 +21,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class RestHotelClientTest {
 
@@ -46,7 +49,7 @@ class RestHotelClientTest {
     }
 
     @Test
-    void confirmsAvailabilityWithBookingCorrelationDataAndJwt() {
+    void confirmsAvailabilityWithBookingCorrelationDataAndServiceJwt() {
         client().confirmAvailability(
                 42L,
                 101L,
@@ -57,7 +60,7 @@ class RestHotelClientTest {
 
         assertThat(requestCount).hasValue(1);
         assertThat(requestPath).isEqualTo("/api/rooms/42/confirm-availability");
-        assertThat(authorization).isEqualTo("Bearer booking-token");
+        assertThat(authorization).isEqualTo("Bearer service-token");
         assertThat(requestBody)
                 .contains("\"bookingId\":101")
                 .contains("\"startDate\":\"2099-07-10\"")
@@ -95,6 +98,8 @@ class RestHotelClientTest {
     }
 
     private RestHotelClient client() {
+        JwtTokenService jwtTokenService = mock(JwtTokenService.class);
+        when(jwtTokenService.issueServiceToken()).thenReturn("service-token");
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(
                 HttpClient.newHttpClient()
         );
@@ -102,7 +107,8 @@ class RestHotelClientTest {
                 RestClient.builder().requestFactory(requestFactory),
                 "http://127.0.0.1:" + server.getAddress().getPort(),
                 3,
-                Duration.ZERO
+                Duration.ZERO,
+                jwtTokenService
         );
     }
 
