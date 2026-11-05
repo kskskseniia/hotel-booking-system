@@ -32,6 +32,12 @@ class OpenApiDocumentationTest {
                 .andExpect(jsonPath("$.paths['/user'].post.responses['201']").exists())
                 .andExpect(jsonPath("$.paths['/user'].patch.security[0].bearerAuth").exists())
                 .andExpect(jsonPath("$.paths['/user'].patch.responses['200']").exists())
+                .andExpect(jsonPath("$.paths['/booking'].post.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/booking'].post.responses['201']").exists())
+                .andExpect(jsonPath("$.paths['/bookings'].get.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/bookings'].get.responses['200']").exists())
+                .andExpect(jsonPath("$.paths['/bookings/rooms/{roomId}'].get.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/bookings/rooms/{roomId}'].get.responses['200']").exists())
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.type").value("http"))
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"));
     }

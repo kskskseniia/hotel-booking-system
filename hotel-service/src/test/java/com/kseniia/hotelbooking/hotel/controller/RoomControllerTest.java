@@ -2,6 +2,7 @@ package com.kseniia.hotelbooking.hotel.controller;
 
 import com.kseniia.hotelbooking.hotel.entity.Hotel;
 import com.kseniia.hotelbooking.hotel.repository.HotelRepository;
+import com.kseniia.hotelbooking.hotel.repository.RoomHoldRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,10 +38,14 @@ class RoomControllerTest {
     private HotelRepository hotelRepository;
 
     @Autowired
+    private RoomHoldRepository roomHoldRepository;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @BeforeEach
     void clearData() {
+        roomHoldRepository.deleteAll();
         Integer roomTableCount = jdbcTemplate.queryForObject("""
                 SELECT COUNT(*)
                 FROM INFORMATION_SCHEMA.TABLES

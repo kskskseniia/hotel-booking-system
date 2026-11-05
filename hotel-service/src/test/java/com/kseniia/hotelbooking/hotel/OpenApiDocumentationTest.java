@@ -33,6 +33,8 @@ class OpenApiDocumentationTest {
                 .andExpect(jsonPath("$.paths['/api/rooms'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/rooms/recommend'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/rooms'].post").exists())
+                .andExpect(jsonPath("$.paths['/api/rooms/{id}/confirm-availability'].post").exists())
+                .andExpect(jsonPath("$.paths['/api/rooms/{id}/release'].post").exists())
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.type").value("http"))
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"))
                 .andExpect(jsonPath("$.security[0].bearerAuth").isArray());

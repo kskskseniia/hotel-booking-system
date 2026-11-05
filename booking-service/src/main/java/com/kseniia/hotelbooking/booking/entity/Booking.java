@@ -89,4 +89,12 @@ public class Booking {
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
+
+    public void confirm() {
+        status = BookingStatus.CONFIRMED;
+    }
+
+    public void cancel() {
+        status = BookingStatus.CANCELLED;
+    }
 }

@@ -41,13 +41,19 @@ class ApiGatewayApplicationTest {
                 "hotel-service-create-room",
                 "hotel-service-list-rooms",
                 "hotel-service-recommend-rooms",
-                "booking-service"
+                "booking-service-create",
+                "booking-service-history",
+                "booking-service-room-history",
+                "booking-service-item"
         );
         assertThat(routes.get("hotel-service").getUri().toString()).isEqualTo("lb://hotel-service");
         assertThat(routes.get("hotel-service-create-room").getUri().toString()).isEqualTo("lb://hotel-service");
         assertThat(routes.get("hotel-service-list-rooms").getUri().toString()).isEqualTo("lb://hotel-service");
         assertThat(routes.get("hotel-service-recommend-rooms").getUri().toString()).isEqualTo("lb://hotel-service");
-        assertThat(routes.get("booking-service").getUri().toString()).isEqualTo("lb://booking-service");
+        assertThat(routes.get("booking-service-create").getUri().toString()).isEqualTo("lb://booking-service");
+        assertThat(routes.get("booking-service-history").getUri().toString()).isEqualTo("lb://booking-service");
+        assertThat(routes.get("booking-service-room-history").getUri().toString()).isEqualTo("lb://booking-service");
+        assertThat(routes.get("booking-service-item").getUri().toString()).isEqualTo("lb://booking-service");
 
         assertThat(pathPatterns(routes.get("hotel-service")))
                 .containsExactly("/api/hotels/**");
@@ -63,13 +69,35 @@ class ApiGatewayApplicationTest {
                 .containsExactly("/api/rooms/recommend");
         assertThat(predicateValues(routes.get("hotel-service-recommend-rooms"), "Method"))
                 .containsExactly("GET");
-        assertThat(pathPatterns(routes.get("booking-service")))
-                .containsExactly("/api/bookings/**");
-        assertThat(routes.get("booking-service").getFilters())
+        assertRoute(routes.get("booking-service-create"), "/api/bookings", "POST", "/booking");
+        assertRoute(routes.get("booking-service-history"), "/api/bookings", "GET", "/bookings");
+        assertRoute(
+                routes.get("booking-service-room-history"),
+                "/api/bookings/rooms/{roomId}",
+                "GET",
+                "/bookings/rooms/{roomId}"
+        );
+        assertThat(pathPatterns(routes.get("booking-service-item")))
+                .containsExactly("/api/bookings/{id}");
+        assertThat(routes.get("booking-service-item").getFilters())
                 .anySatisfy(filter -> {
-                    assertThat(filter.getName()).isEqualTo("StripPrefix");
-                    assertThat(filter.getArgs()).containsValue("2");
+                    assertThat(filter.getName()).isEqualTo("SetPath");
+                    assertThat(filter.getArgs()).containsValue("/booking/{id}");
                 });
+    }
+
+    private void assertRoute(
+            RouteDefinition routeDefinition,
+            String path,
+            String method,
+            String targetPath
+    ) {
+        assertThat(pathPatterns(routeDefinition)).containsExactly(path);
+        assertThat(predicateValues(routeDefinition, "Method")).containsExactly(method);
+        assertThat(routeDefinition.getFilters()).anySatisfy(filter -> {
+            assertThat(filter.getName()).isEqualTo("SetPath");
+            assertThat(filter.getArgs()).containsValue(targetPath);
+        });
     }
 
     private List<String> pathPatterns(RouteDefinition routeDefinition) {

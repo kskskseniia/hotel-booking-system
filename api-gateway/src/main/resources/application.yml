@@ -25,12 +25,33 @@ spring:
               predicates:
                 - Path=/api/rooms/recommend
                 - Method=GET
-            - id: booking-service
+            - id: booking-service-create
               uri: lb://booking-service
               predicates:
-                - Path=/api/bookings/**
+                - Path=/api/bookings
+                - Method=POST
               filters:
-                - StripPrefix=2
+                - SetPath=/booking
+            - id: booking-service-history
+              uri: lb://booking-service
+              predicates:
+                - Path=/api/bookings
+                - Method=GET
+              filters:
+                - SetPath=/bookings
+            - id: booking-service-room-history
+              uri: lb://booking-service
+              predicates:
+                - Path=/api/bookings/rooms/{roomId}
+                - Method=GET
+              filters:
+                - SetPath=/bookings/rooms/{roomId}
+            - id: booking-service-item
+              uri: lb://booking-service
+              predicates:
+                - Path=/api/bookings/{id}
+              filters:
+                - SetPath=/booking/{id}
 
 server:
   port: 8080

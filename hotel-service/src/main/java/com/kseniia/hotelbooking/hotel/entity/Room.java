@@ -60,4 +60,14 @@ public class Room {
     public long getTimesBooked() {
         return timesBooked;
     }
+
+    public void incrementTimesBooked() {
+        timesBooked++;
+    }
+
+    public void decrementTimesBooked() {
+        if (timesBooked > 0) {
+            timesBooked--;
+        }
+    }
 }
