@@ -62,11 +62,25 @@ public class BookingStateService {
         find(bookingId).cancel();
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void cancel(Long bookingId, Long userId) {
+        Booking booking = bookingRepository.findByIdAndUser_Id(bookingId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
+        booking.cancel();
+    }
+
     @Transactional(readOnly = true)
     public List<BookingResponse> getHistory(Long userId) {
         return bookingRepository.findAllByUser_IdOrderByCreatedAtDesc(userId).stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public BookingResponse get(Long bookingId, Long userId) {
+        Booking booking = bookingRepository.findByIdAndUser_Id(bookingId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
+        return toResponse(booking);
     }
 
     @Transactional(readOnly = true)

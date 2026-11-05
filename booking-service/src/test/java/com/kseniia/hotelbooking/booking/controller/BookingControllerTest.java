@@ -37,6 +37,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -260,6 +261,155 @@ class BookingControllerTest {
                 .andExpect(jsonPath("$[0].status").value("CANCELLED"))
                 .andExpect(jsonPath("$[1].roomId").value(41))
                 .andExpect(jsonPath("$[1].status").value("CONFIRMED"));
+    }
+
+    @Test
+    void returnsAuthenticatedUsersBookingById() throws Exception {
+        Booking booking = bookingRepository.saveAndFlush(new Booking(
+                user,
+                42L,
+                START_DATE,
+                END_DATE,
+                BookingStatus.CONFIRMED,
+                LocalDateTime.of(2099, 1, 1, 10, 0)
+        ));
+
+        mockMvc.perform(get("/booking/{id}", booking.getId())
+                        .header(AUTHORIZATION, bearer(user)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(booking.getId()))
+                .andExpect(jsonPath("$.roomId").value(42))
+                .andExpect(jsonPath("$.startDate").value("2099-07-10"))
+                .andExpect(jsonPath("$.endDate").value("2099-07-12"))
+                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+    }
+
+    @Test
+    void cancelsAuthenticatedUsersConfirmedBooking() throws Exception {
+        Booking booking = bookingRepository.saveAndFlush(new Booking(
+                user,
+                42L,
+                START_DATE,
+                END_DATE,
+                BookingStatus.CONFIRMED,
+                LocalDateTime.now()
+        ));
+        String authorization = bearer(user);
+
+        mockMvc.perform(delete("/booking/{id}", booking.getId())
+                        .header(AUTHORIZATION, authorization))
+                .andExpect(status().isNoContent());
+
+        assertThat(bookingRepository.findById(booking.getId()).orElseThrow().getStatus())
+                .isEqualTo(BookingStatus.CANCELLED);
+        verify(hotelClient).release(42L, booking.getId(), authorization);
+    }
+
+    @Test
+    void doesNotExposeAnotherUsersBookingById() throws Exception {
+        User anotherUser = userRepository.saveAndFlush(
+                new User("booking-owner", "encoded-password", UserRole.USER)
+        );
+        Booking booking = bookingRepository.saveAndFlush(new Booking(
+                anotherUser,
+                42L,
+                START_DATE,
+                END_DATE,
+                BookingStatus.CONFIRMED,
+                LocalDateTime.now()
+        ));
+
+        mockMvc.perform(get("/booking/{id}", booking.getId())
+                        .header(AUTHORIZATION, bearer(user)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void cannotCancelAnotherUsersBooking() throws Exception {
+        User anotherUser = userRepository.saveAndFlush(
+                new User("cancellation-owner", "encoded-password", UserRole.USER)
+        );
+        Booking booking = bookingRepository.saveAndFlush(new Booking(
+                anotherUser,
+                42L,
+                START_DATE,
+                END_DATE,
+                BookingStatus.CONFIRMED,
+                LocalDateTime.now()
+        ));
+
+        mockMvc.perform(delete("/booking/{id}", booking.getId())
+                        .header(AUTHORIZATION, bearer(user)))
+                .andExpect(status().isNotFound());
+
+        assertThat(bookingRepository.findById(booking.getId()).orElseThrow().getStatus())
+                .isEqualTo(BookingStatus.CONFIRMED);
+        verifyNoInteractions(hotelClient);
+    }
+
+    @Test
+    void repeatedCancellationIsIdempotent() throws Exception {
+        Booking booking = bookingRepository.saveAndFlush(new Booking(
+                user,
+                42L,
+                START_DATE,
+                END_DATE,
+                BookingStatus.CANCELLED,
+                LocalDateTime.now()
+        ));
+
+        mockMvc.perform(delete("/booking/{id}", booking.getId())
+                        .header(AUTHORIZATION, bearer(user)))
+                .andExpect(status().isNoContent());
+
+        verifyNoInteractions(hotelClient);
+    }
+
+    @Test
+    void keepsBookingConfirmedWhenCancellationReleaseFails() throws Exception {
+        Booking booking = bookingRepository.saveAndFlush(new Booking(
+                user,
+                42L,
+                START_DATE,
+                END_DATE,
+                BookingStatus.CONFIRMED,
+                LocalDateTime.now()
+        ));
+        String authorization = bearer(user);
+        doThrow(new HotelServiceUnavailableException(new RuntimeException("down")))
+                .when(hotelClient).release(42L, booking.getId(), authorization);
+
+        mockMvc.perform(delete("/booking/{id}", booking.getId())
+                        .header(AUTHORIZATION, authorization))
+                .andExpect(status().isServiceUnavailable());
+
+        assertThat(bookingRepository.findById(booking.getId()).orElseThrow().getStatus())
+                .isEqualTo(BookingStatus.CONFIRMED);
+    }
+
+    @Test
+    void adminCannotReadOrCancelUserBooking() throws Exception {
+        User admin = userRepository.saveAndFlush(
+                new User("booking-admin", "encoded-password", UserRole.ADMIN)
+        );
+        Booking booking = bookingRepository.saveAndFlush(new Booking(
+                user,
+                42L,
+                START_DATE,
+                END_DATE,
+                BookingStatus.CONFIRMED,
+                LocalDateTime.now()
+        ));
+        String authorization = bearer(admin);
+
+        mockMvc.perform(get("/booking/{id}", booking.getId())
+                        .header(AUTHORIZATION, authorization))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(delete("/booking/{id}", booking.getId())
+                        .header(AUTHORIZATION, authorization))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(hotelClient);
     }
 
     @Test

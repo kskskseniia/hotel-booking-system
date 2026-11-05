@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -54,6 +55,31 @@ public class BookingController {
     public List<BookingResponse> getHistory(@AuthenticationPrincipal Jwt jwt) {
         Number userId = jwt.getClaim("userId");
         return bookingService.getHistory(userId.longValue());
+    }
+
+    @GetMapping("/booking/{id}")
+    @Operation(
+            security = @SecurityRequirement(name = "bearerAuth"),
+            responses = @ApiResponse(responseCode = "200", description = "Authenticated user's booking")
+    )
+    public BookingResponse get(@PathVariable Long id, @AuthenticationPrincipal Jwt jwt) {
+        Number userId = jwt.getClaim("userId");
+        return bookingService.get(id, userId.longValue());
+    }
+
+    @DeleteMapping("/booking/{id}")
+    @Operation(
+            security = @SecurityRequirement(name = "bearerAuth"),
+            responses = @ApiResponse(responseCode = "204", description = "Booking cancelled")
+    )
+    public ResponseEntity<Void> cancel(
+            @PathVariable Long id,
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization
+    ) {
+        Number userId = jwt.getClaim("userId");
+        bookingService.cancel(id, userId.longValue(), authorization);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/bookings/rooms/{roomId}")

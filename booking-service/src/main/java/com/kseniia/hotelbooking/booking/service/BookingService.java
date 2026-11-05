@@ -5,6 +5,7 @@ import com.kseniia.hotelbooking.booking.client.RoomCandidate;
 import com.kseniia.hotelbooking.booking.dto.AdminRoomBookingResponse;
 import com.kseniia.hotelbooking.booking.dto.BookingResponse;
 import com.kseniia.hotelbooking.booking.dto.CreateBookingRequest;
+import com.kseniia.hotelbooking.booking.entity.BookingStatus;
 import com.kseniia.hotelbooking.booking.exception.RoomUnavailableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -113,6 +114,20 @@ public class BookingService {
 
     public List<BookingResponse> getHistory(Long userId) {
         return bookingStateService.getHistory(userId);
+    }
+
+    public BookingResponse get(Long bookingId, Long userId) {
+        return bookingStateService.get(bookingId, userId);
+    }
+
+    public void cancel(Long bookingId, Long userId, String authorization) {
+        BookingResponse booking = bookingStateService.get(bookingId, userId);
+        if (booking.status() == BookingStatus.CANCELLED) {
+            return;
+        }
+        hotelClient.release(booking.roomId(), bookingId, authorization);
+        bookingStateService.cancel(bookingId, userId);
+        LOGGER.info("Booking {} transitioned {} -> CANCELLED", bookingId, booking.status());
     }
 
     public List<AdminRoomBookingResponse> getRoomBookings(Long roomId) {

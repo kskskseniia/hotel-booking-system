@@ -90,6 +90,8 @@ public class SecurityConfiguration {
                                 "/swagger-ui.html"
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/booking").hasRole("USER")
+                        .requestMatchers(HttpMethod.GET, "/booking/*").hasRole("USER")
+                        .requestMatchers(HttpMethod.DELETE, "/booking/*").hasRole("USER")
                         .requestMatchers(HttpMethod.GET, "/bookings/rooms/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/bookings").hasRole("USER")
                         .requestMatchers(HttpMethod.POST, "/user").hasRole("ADMIN")
