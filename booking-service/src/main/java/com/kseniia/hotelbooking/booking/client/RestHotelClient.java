@@ -100,12 +100,22 @@ public class RestHotelClient implements HotelClient {
                 lastFailure = exception;
             } catch (ResourceAccessException exception) {
                 lastFailure = exception;
+            } catch (IllegalStateException exception) {
+                if (!isMissingServiceInstance(exception)) {
+                    throw exception;
+                }
+                lastFailure = exception;
             }
             if (attempt < maxAttempts) {
                 pause(attempt);
             }
         }
         throw new HotelServiceUnavailableException(lastFailure);
+    }
+
+    private boolean isMissingServiceInstance(IllegalStateException exception) {
+        return exception.getMessage() != null
+                && exception.getMessage().startsWith("No instances available for ");
     }
 
     private String serviceAuthorization() {

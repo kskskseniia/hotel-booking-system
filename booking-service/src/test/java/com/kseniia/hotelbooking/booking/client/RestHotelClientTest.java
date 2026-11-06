@@ -8,8 +8,15 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.cloud.client.ServiceInstance;
+import org.springframework.cloud.client.loadbalancer.EmptyResponse;
+import org.springframework.cloud.client.loadbalancer.LoadBalancerInterceptor;
+import org.springframework.cloud.client.loadbalancer.LoadBalancerProperties;
+import org.springframework.cloud.client.loadbalancer.reactive.ReactiveLoadBalancer;
+import org.springframework.cloud.loadbalancer.blocking.client.BlockingLoadBalancerClient;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
+import reactor.core.publisher.Mono;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -17,6 +24,7 @@ import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -97,14 +105,84 @@ class RestHotelClientTest {
         assertThat(requestCount).hasValue(3);
     }
 
+    @Test
+    void mapsMissingLoadBalancerInstanceToHotelServiceUnavailable() {
+        AtomicInteger attempts = new AtomicInteger();
+        ReactiveLoadBalancer.Factory<ServiceInstance> factory = emptyLoadBalancerFactory(attempts);
+        BlockingLoadBalancerClient loadBalancerClient = new BlockingLoadBalancerClient(factory);
+        RestClient.Builder builder = RestClient.builder()
+                .requestInterceptor(new LoadBalancerInterceptor(loadBalancerClient));
+
+        assertThatThrownBy(() -> client(builder).confirmAvailability(
+                42L,
+                101L,
+                LocalDate.of(2099, 7, 10),
+                LocalDate.of(2099, 7, 12),
+                "Bearer booking-token"
+        )).isInstanceOf(HotelServiceUnavailableException.class);
+
+        assertThat(attempts).hasValue(3);
+    }
+
+    @Test
+    void doesNotMapUnrelatedIllegalStateException() {
+        AtomicInteger attempts = new AtomicInteger();
+        IllegalStateException failure = new IllegalStateException("unrelated failure");
+        RestClient.Builder builder = RestClient.builder().requestInterceptor((request, body, execution) -> {
+            attempts.incrementAndGet();
+            throw failure;
+        });
+
+        assertThatThrownBy(() -> client(builder).confirmAvailability(
+                42L,
+                101L,
+                LocalDate.of(2099, 7, 10),
+                LocalDate.of(2099, 7, 12),
+                "Bearer booking-token"
+        )).isSameAs(failure);
+
+        assertThat(attempts).hasValue(1);
+    }
+
+    private ReactiveLoadBalancer.Factory<ServiceInstance> emptyLoadBalancerFactory(AtomicInteger attempts) {
+        return new ReactiveLoadBalancer.Factory<>() {
+            @Override
+            public LoadBalancerProperties getProperties(String serviceId) {
+                return new LoadBalancerProperties();
+            }
+
+            @Override
+            public ReactiveLoadBalancer<ServiceInstance> getInstance(String serviceId) {
+                return request -> {
+                    attempts.incrementAndGet();
+                    return Mono.just(new EmptyResponse());
+                };
+            }
+
+            @Override
+            public <X> Map<String, X> getInstances(String serviceId, Class<X> type) {
+                return Map.of();
+            }
+
+            @Override
+            public <X> X getInstance(String serviceId, Class<?> type, Class<?>... generics) {
+                return null;
+            }
+        };
+    }
+
     private RestHotelClient client() {
-        JwtTokenService jwtTokenService = mock(JwtTokenService.class);
-        when(jwtTokenService.issueServiceToken()).thenReturn("service-token");
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(
                 HttpClient.newHttpClient()
         );
+        return client(RestClient.builder().requestFactory(requestFactory));
+    }
+
+    private RestHotelClient client(RestClient.Builder builder) {
+        JwtTokenService jwtTokenService = mock(JwtTokenService.class);
+        when(jwtTokenService.issueServiceToken()).thenReturn("service-token");
         return new RestHotelClient(
-                RestClient.builder().requestFactory(requestFactory),
+                builder,
                 "http://127.0.0.1:" + server.getAddress().getPort(),
                 3,
                 Duration.ZERO,
