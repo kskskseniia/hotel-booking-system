@@ -16,6 +16,11 @@ public class UserAdministrationExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).build();
     }
 
+    @ExceptionHandler(UserDeletionConflictException.class)
+    public ResponseEntity<Void> handleUserDeletionConflict() {
+        return ResponseEntity.status(HttpStatus.CONFLICT).build();
+    }
+
     @ExceptionHandler(UserNotFoundException.class)
     public ResponseEntity<Void> handleUserNotFound() {
         return ResponseEntity.notFound().build();

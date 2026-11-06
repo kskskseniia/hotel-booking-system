@@ -1,6 +1,9 @@
 package com.kseniia.hotelbooking.booking.service;
 
 import com.kseniia.hotelbooking.booking.dto.CredentialsRequest;
+import com.kseniia.hotelbooking.booking.entity.User;
+import com.kseniia.hotelbooking.booking.entity.UserRole;
+import com.kseniia.hotelbooking.booking.exception.InvalidCredentialsException;
 import com.kseniia.hotelbooking.booking.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,9 +13,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.Optional;
+
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -48,5 +55,18 @@ class UserAuthenticationServiceTest {
         assertThatThrownBy(() -> authenticationService.register(
                 new CredentialsRequest("alice", "strong-password")
         )).isSameAs(databaseFailure);
+    }
+
+    @Test
+    void rejectsAuthenticationWhileDeletionIsPending() {
+        User user = new User("alice", "password-hash", UserRole.USER);
+        user.requestDeletion();
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("strong-password", "password-hash")).thenReturn(true);
+
+        assertThatThrownBy(() -> authenticationService.authenticate(
+                new CredentialsRequest("alice", "strong-password")
+        )).isInstanceOf(InvalidCredentialsException.class);
+        verify(jwtTokenService, never()).issueToken(any());
     }
 }

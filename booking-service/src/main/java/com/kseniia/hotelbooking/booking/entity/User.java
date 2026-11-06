@@ -31,6 +31,9 @@ public class User {
     @Column(nullable = false)
     private UserRole role;
 
+    @Column(name = "deletion_requested", nullable = false, columnDefinition = "boolean default false")
+    private boolean deletionRequested;
+
     protected User() {
     }
 
@@ -42,6 +45,10 @@ public class User {
 
     public void updateRole(UserRole role) {
         this.role = role;
+    }
+
+    public void requestDeletion() {
+        deletionRequested = true;
     }
 
     public Long getId() {
@@ -58,5 +65,9 @@ public class User {
 
     public UserRole getRole() {
         return role;
+    }
+
+    public boolean isDeletionRequested() {
+        return deletionRequested;
     }
 }

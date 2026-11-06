@@ -6,7 +6,6 @@ import com.kseniia.hotelbooking.booking.entity.Booking;
 import com.kseniia.hotelbooking.booking.entity.BookingStatus;
 import com.kseniia.hotelbooking.booking.entity.User;
 import com.kseniia.hotelbooking.booking.repository.BookingRepository;
-import com.kseniia.hotelbooking.booking.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -21,17 +20,20 @@ import java.util.List;
 public class BookingStateService {
 
     private final BookingRepository bookingRepository;
-    private final UserRepository userRepository;
+    private final UserLockService userLockService;
 
-    public BookingStateService(BookingRepository bookingRepository, UserRepository userRepository) {
+    public BookingStateService(BookingRepository bookingRepository, UserLockService userLockService) {
         this.bookingRepository = bookingRepository;
-        this.userRepository = userRepository;
+        this.userLockService = userLockService;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public BookingResponse createPending(Long userId, Long roomId, LocalDate startDate, LocalDate endDate) {
-        User user = userRepository.findById(userId)
+        User user = userLockService.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        if (user.isDeletionRequested()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+        }
         Booking booking = bookingRepository.saveAndFlush(new Booking(
                 user,
                 roomId,

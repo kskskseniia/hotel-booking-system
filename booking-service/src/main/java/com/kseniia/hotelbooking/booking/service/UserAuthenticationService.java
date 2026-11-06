@@ -61,7 +61,7 @@ public class UserAuthenticationService {
         User user = userRepository.findByUsername(request.username()).orElse(null);
         String passwordHash = user == null ? dummyPasswordHash : user.getPasswordHash();
         boolean passwordMatches = passwordEncoder.matches(request.password(), passwordHash);
-        if (user == null || !passwordMatches) {
+        if (user == null || user.isDeletionRequested() || !passwordMatches) {
             throw new InvalidCredentialsException();
         }
         return jwtTokenService.issueToken(user);

@@ -2,9 +2,14 @@ package com.kseniia.hotelbooking.booking.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.kseniia.hotelbooking.booking.client.HotelClient;
 import com.kseniia.hotelbooking.booking.dto.TokenResponse;
+import com.kseniia.hotelbooking.booking.entity.Booking;
+import com.kseniia.hotelbooking.booking.entity.BookingStatus;
 import com.kseniia.hotelbooking.booking.entity.User;
 import com.kseniia.hotelbooking.booking.entity.UserRole;
+import com.kseniia.hotelbooking.booking.exception.HotelServiceUnavailableException;
+import com.kseniia.hotelbooking.booking.repository.BookingRepository;
 import com.kseniia.hotelbooking.booking.repository.UserRepository;
 import com.kseniia.hotelbooking.booking.service.JwtTokenService;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,11 +25,18 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -43,6 +55,9 @@ class UserAdministrationHttpTest {
     private UserRepository userRepository;
 
     @Autowired
+    private BookingRepository bookingRepository;
+
+    @Autowired
     private JwtTokenService jwtTokenService;
 
     @Autowired
@@ -53,6 +68,9 @@ class UserAdministrationHttpTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @MockitoBean
+    private HotelClient hotelClient;
 
     @BeforeEach
     void cleanDatabase() {
@@ -122,6 +140,237 @@ class UserAdministrationHttpTest {
         assertThat(updatedUser.getUsername()).isEqualTo("role-target");
         assertThat(updatedUser.getRole()).isEqualTo(UserRole.ADMIN);
         assertThat(passwordEncoder.matches("preserved-password", updatedUser.getPasswordHash())).isTrue();
+    }
+
+    @Test
+    void adminDeletesUserAndBookingsOverRealHttp() {
+        HttpHeaders headers = bearerHeaders(issueToken("admin", UserRole.ADMIN));
+        User target = userRepository.saveAndFlush(new User(
+                "delete-target",
+                passwordEncoder.encode("deleted-password"),
+                UserRole.USER
+        ));
+        Booking booking = bookingRepository.saveAndFlush(new Booking(
+                target,
+                17L,
+                LocalDate.now().plusDays(1),
+                LocalDate.now().plusDays(2),
+                BookingStatus.CONFIRMED,
+                LocalDateTime.now()
+        ));
+
+        ResponseEntity<Void> response = restTemplate.exchange(
+                "/user",
+                HttpMethod.DELETE,
+                new HttpEntity<>(Map.of("username", "delete-target"), headers),
+                Void.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        verify(hotelClient).release(
+                17L,
+                booking.getId(),
+                headers.getFirst(HttpHeaders.AUTHORIZATION)
+        );
+        assertThat(userRepository.findById(target.getId())).isEmpty();
+        assertThat(bookingRepository.findById(booking.getId())).isEmpty();
+    }
+
+    @Test
+    void deletingMissingUserReturnsNotFoundOverRealHttp() {
+        HttpHeaders headers = bearerHeaders(issueToken("admin", UserRole.ADMIN));
+
+        ResponseEntity<Void> response = restTemplate.exchange(
+                "/user",
+                HttpMethod.DELETE,
+                new HttpEntity<>(Map.of("username", "missing-user"), headers),
+                Void.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        verifyNoInteractions(hotelClient);
+    }
+
+    @Test
+    void invalidDeleteRequestReturnsBadRequestOverRealHttp() {
+        HttpHeaders headers = bearerHeaders(issueToken("admin", UserRole.ADMIN));
+
+        ResponseEntity<Void> response = restTemplate.exchange(
+                "/user",
+                HttpMethod.DELETE,
+                new HttpEntity<>(Map.of("username", " "), headers),
+                Void.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        verifyNoInteractions(hotelClient);
+    }
+
+    @Test
+    void regularUserCannotDeleteUserOverRealHttp() {
+        HttpHeaders headers = bearerHeaders(issueToken("regular-user", UserRole.USER));
+        User target = userRepository.saveAndFlush(new User(
+                "protected-user",
+                passwordEncoder.encode("preserved-password"),
+                UserRole.USER
+        ));
+
+        ResponseEntity<Void> response = restTemplate.exchange(
+                "/user",
+                HttpMethod.DELETE,
+                new HttpEntity<>(Map.of("username", "protected-user"), headers),
+                Void.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(userRepository.findById(target.getId())).isPresent();
+        verifyNoInteractions(hotelClient);
+    }
+
+    @Test
+    void missingTokenCannotDeleteUserOverRealHttp() {
+        User target = userRepository.saveAndFlush(new User(
+                "unauthorized-delete-target",
+                passwordEncoder.encode("preserved-password"),
+                UserRole.USER
+        ));
+
+        ResponseEntity<Void> response = restTemplate.exchange(
+                "/user",
+                HttpMethod.DELETE,
+                new HttpEntity<>(Map.of("username", "unauthorized-delete-target")),
+                Void.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(userRepository.findById(target.getId())).isPresent();
+        verifyNoInteractions(hotelClient);
+    }
+
+    @Test
+    void failedHotelReleaseKeepsUserAndBookingsOverRealHttp() {
+        HttpHeaders headers = bearerHeaders(issueToken("admin", UserRole.ADMIN));
+        User target = userRepository.saveAndFlush(new User(
+                "release-failure-target",
+                passwordEncoder.encode("preserved-password"),
+                UserRole.USER
+        ));
+        Booking booking = bookingRepository.saveAndFlush(new Booking(
+                target,
+                23L,
+                LocalDate.now().plusDays(1),
+                LocalDate.now().plusDays(2),
+                BookingStatus.CONFIRMED,
+                LocalDateTime.now()
+        ));
+        doThrow(new HotelServiceUnavailableException(new RuntimeException("test failure")))
+                .when(hotelClient)
+                .release(23L, booking.getId(), headers.getFirst(HttpHeaders.AUTHORIZATION));
+
+        ResponseEntity<Void> response = restTemplate.exchange(
+                "/user",
+                HttpMethod.DELETE,
+                new HttpEntity<>(Map.of("username", "release-failure-target"), headers),
+                Void.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(userRepository.findById(target.getId())).isPresent();
+        assertThat(bookingRepository.findById(booking.getId())).isPresent();
+    }
+
+    @Test
+    void partialHotelReleaseIsDurableAndRetryableOverRealHttp() {
+        HttpHeaders headers = bearerHeaders(issueToken("admin", UserRole.ADMIN));
+        User target = userRepository.saveAndFlush(new User(
+                "partial-release-target",
+                passwordEncoder.encode("preserved-password"),
+                UserRole.USER
+        ));
+        Booking failedBooking = bookingRepository.saveAndFlush(new Booking(
+                target,
+                31L,
+                LocalDate.now().plusDays(3),
+                LocalDate.now().plusDays(4),
+                BookingStatus.CONFIRMED,
+                LocalDateTime.now().minusMinutes(1)
+        ));
+        Booking releasedBooking = bookingRepository.saveAndFlush(new Booking(
+                target,
+                32L,
+                LocalDate.now().plusDays(1),
+                LocalDate.now().plusDays(2),
+                BookingStatus.CONFIRMED,
+                LocalDateTime.now()
+        ));
+        doThrow(new HotelServiceUnavailableException(new RuntimeException("test failure")))
+                .when(hotelClient)
+                .release(31L, failedBooking.getId(), headers.getFirst(HttpHeaders.AUTHORIZATION));
+
+        ResponseEntity<Void> failedResponse = restTemplate.exchange(
+                "/user",
+                HttpMethod.DELETE,
+                new HttpEntity<>(Map.of("username", "partial-release-target"), headers),
+                Void.class
+        );
+
+        assertThat(failedResponse.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT deletion_requested FROM users WHERE id = ?",
+                Boolean.class,
+                target.getId()
+        )).isTrue();
+        assertThat(bookingRepository.findById(releasedBooking.getId()).orElseThrow().getStatus())
+                .isEqualTo(BookingStatus.CANCELLED);
+        assertThat(bookingRepository.findById(failedBooking.getId()).orElseThrow().getStatus())
+                .isEqualTo(BookingStatus.CONFIRMED);
+
+        reset(hotelClient);
+        ResponseEntity<Void> retryResponse = restTemplate.exchange(
+                "/user",
+                HttpMethod.DELETE,
+                new HttpEntity<>(Map.of("username", "partial-release-target"), headers),
+                Void.class
+        );
+
+        assertThat(retryResponse.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        verify(hotelClient).release(
+                31L,
+                failedBooking.getId(),
+                headers.getFirst(HttpHeaders.AUTHORIZATION)
+        );
+        assertThat(userRepository.findById(target.getId())).isEmpty();
+        assertThat(bookingRepository.findAllByUser_IdOrderByCreatedAtDesc(target.getId())).isEmpty();
+    }
+
+    @Test
+    void pendingBookingPreventsUserDeletionOverRealHttp() {
+        HttpHeaders headers = bearerHeaders(issueToken("admin", UserRole.ADMIN));
+        User target = userRepository.saveAndFlush(new User(
+                "pending-booking-target",
+                passwordEncoder.encode("preserved-password"),
+                UserRole.USER
+        ));
+        Booking booking = bookingRepository.saveAndFlush(new Booking(
+                target,
+                29L,
+                LocalDate.now().plusDays(1),
+                LocalDate.now().plusDays(2),
+                BookingStatus.PENDING,
+                LocalDateTime.now()
+        ));
+
+        ResponseEntity<Void> response = restTemplate.exchange(
+                "/user",
+                HttpMethod.DELETE,
+                new HttpEntity<>(Map.of("username", "pending-booking-target"), headers),
+                Void.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(userRepository.findById(target.getId())).isPresent();
+        assertThat(bookingRepository.findById(booking.getId())).isPresent();
+        verifyNoInteractions(hotelClient);
     }
 
     @Test
