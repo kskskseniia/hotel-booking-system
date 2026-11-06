@@ -3,6 +3,7 @@ package com.kseniia.hotelbooking.booking.service;
 import com.kseniia.hotelbooking.booking.dto.AdminRoomBookingResponse;
 import com.kseniia.hotelbooking.booking.dto.BookingResponse;
 import com.kseniia.hotelbooking.booking.entity.Booking;
+import com.kseniia.hotelbooking.booking.entity.BookingRequestStatus;
 import com.kseniia.hotelbooking.booking.entity.BookingStatus;
 import com.kseniia.hotelbooking.booking.entity.User;
 import com.kseniia.hotelbooking.booking.repository.BookingRepository;
@@ -28,21 +29,65 @@ public class BookingStateService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public BookingResponse createPending(Long userId, Long roomId, LocalDate startDate, LocalDate endDate) {
+    public PendingBookingResult createPending(
+            Long userId,
+            String requestId,
+            boolean autoSelect,
+            Long requestedRoomId,
+            Long roomId,
+            LocalDate startDate,
+            LocalDate endDate
+    ) {
         User user = userLockService.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         if (user.isDeletionRequested()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
         }
+        Booking existing = bookingRepository.findByUser_IdAndRequestId(userId, requestId).orElse(null);
+        if (existing != null) {
+            validateRequest(existing, autoSelect, requestedRoomId, startDate, endDate);
+            return new PendingBookingResult(toResponse(existing), existing.getRequestStatus(), false);
+        }
         Booking booking = bookingRepository.saveAndFlush(new Booking(
                 user,
+                requestId,
+                autoSelect,
+                requestedRoomId,
                 roomId,
                 startDate,
                 endDate,
                 BookingStatus.PENDING,
                 LocalDateTime.now()
         ));
-        return toResponse(booking);
+        return new PendingBookingResult(toResponse(booking), booking.getRequestStatus(), true);
+    }
+
+    @Transactional(readOnly = true)
+    public PendingBookingResult findByRequest(
+            Long userId,
+            String requestId,
+            boolean autoSelect,
+            Long requestedRoomId,
+            LocalDate startDate,
+            LocalDate endDate
+    ) {
+        Booking booking = bookingRepository.findByUser_IdAndRequestId(userId, requestId).orElse(null);
+        if (booking == null) {
+            return null;
+        }
+        validateRequest(booking, autoSelect, requestedRoomId, startDate, endDate);
+        return new PendingBookingResult(toResponse(booking), booking.getRequestStatus(), false);
+    }
+
+    @Transactional(readOnly = true)
+    public PendingBookingResult findByRequestId(Long userId, String requestId) {
+        return bookingRepository.findByUser_IdAndRequestId(userId, requestId)
+                .map(booking -> new PendingBookingResult(
+                        toResponse(booking),
+                        booking.getRequestStatus(),
+                        false
+                ))
+                .orElse(null);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -60,8 +105,8 @@ public class BookingStateService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void cancel(Long bookingId) {
-        findForUpdate(bookingId).cancel();
+    public void failRequest(Long bookingId, BookingRequestStatus requestStatus, boolean cancelBooking) {
+        findForUpdate(bookingId).failRequest(requestStatus, cancelBooking);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -99,6 +144,21 @@ public class BookingStateService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
     }
 
+    private void validateRequest(
+            Booking booking,
+            boolean autoSelect,
+            Long requestedRoomId,
+            LocalDate startDate,
+            LocalDate endDate
+    ) {
+        if (!booking.matchesRequest(autoSelect, requestedRoomId, startDate, endDate)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "requestId was already used with a different booking request"
+            );
+        }
+    }
+
     private BookingResponse toResponse(Booking booking) {
         return new BookingResponse(
                 booking.getId(),
@@ -120,5 +180,12 @@ public class BookingStateService {
                 booking.getStatus(),
                 booking.getCreatedAt()
         );
+    }
+
+    public record PendingBookingResult(
+            BookingResponse booking,
+            BookingRequestStatus requestStatus,
+            boolean created
+    ) {
     }
 }

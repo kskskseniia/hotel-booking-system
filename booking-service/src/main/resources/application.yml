@@ -24,6 +24,9 @@ eureka:
 jwt:
   secret: ${JWT_SECRET}
 
+booking:
+  idempotency-wait-timeout: ${BOOKING_IDEMPOTENCY_WAIT_TIMEOUT:2m}
+
 admin:
   bootstrap:
     enabled: ${ADMIN_BOOTSTRAP_ENABLED:false}

@@ -104,6 +104,9 @@ class UserDeletionConcurrencyTest {
 
         Future<?> creation = executor.submit(() -> bookingStateService.createPending(
                 user.getId(),
+                "deletion-race-request",
+                false,
+                32L,
                 32L,
                 LocalDate.now().plusDays(3),
                 LocalDate.now().plusDays(4)

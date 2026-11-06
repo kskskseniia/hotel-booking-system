@@ -66,7 +66,9 @@ public class UserDeletionWorker {
             throw new UserDeletionConflictException();
         }
 
-        hotelClient.release(booking.getRoomId(), bookingId, authorization);
+        if (booking.getRoomId() != null) {
+            hotelClient.release(booking.getRoomId(), bookingId, authorization);
+        }
         booking.cancel();
         bookingRepository.flush();
     }

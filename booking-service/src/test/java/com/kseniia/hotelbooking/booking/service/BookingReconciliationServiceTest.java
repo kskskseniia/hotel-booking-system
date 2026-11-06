@@ -2,6 +2,7 @@ package com.kseniia.hotelbooking.booking.service;
 
 import com.kseniia.hotelbooking.booking.client.HotelClient;
 import com.kseniia.hotelbooking.booking.entity.Booking;
+import com.kseniia.hotelbooking.booking.entity.BookingRequestStatus;
 import com.kseniia.hotelbooking.booking.entity.BookingStatus;
 import com.kseniia.hotelbooking.booking.entity.User;
 import com.kseniia.hotelbooking.booking.entity.UserRole;
@@ -28,6 +29,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @SpringBootTest(properties = {
         "eureka.client.enabled=false",
@@ -75,8 +77,32 @@ class BookingReconciliationServiceTest {
         reconciliationService.reconcilePendingBookings();
 
         verify(hotelClient).release(42L, booking.getId(), "");
-        assertThat(bookingRepository.findById(booking.getId()).orElseThrow().getStatus())
-                .isEqualTo(BookingStatus.CANCELLED);
+        Booking reconciled = bookingRepository.findById(booking.getId()).orElseThrow();
+        assertThat(reconciled.getStatus()).isEqualTo(BookingStatus.CANCELLED);
+        assertThat(reconciled.getRequestStatus()).isEqualTo(BookingRequestStatus.HOTEL_UNAVAILABLE);
+    }
+
+    @Test
+    void cancelsExpiredAutoSelectCommandWithoutReleasingUnassignedRoom() {
+        User user = userRepository.saveAndFlush(new User("unassigned-room-user", "encoded", UserRole.USER));
+        Booking booking = bookingRepository.saveAndFlush(new Booking(
+                user,
+                "stale-auto-request",
+                true,
+                null,
+                null,
+                LocalDate.of(2099, 7, 10),
+                LocalDate.of(2099, 7, 12),
+                BookingStatus.PENDING,
+                LocalDateTime.now().minusMinutes(5)
+        ));
+
+        reconciliationService.reconcilePendingBookings();
+
+        verifyNoInteractions(hotelClient);
+        Booking reconciled = bookingRepository.findById(booking.getId()).orElseThrow();
+        assertThat(reconciled.getStatus()).isEqualTo(BookingStatus.CANCELLED);
+        assertThat(reconciled.getRequestStatus()).isEqualTo(BookingRequestStatus.HOTEL_UNAVAILABLE);
     }
 
     @Test

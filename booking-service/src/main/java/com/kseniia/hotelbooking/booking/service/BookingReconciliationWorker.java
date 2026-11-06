@@ -2,6 +2,7 @@ package com.kseniia.hotelbooking.booking.service;
 
 import com.kseniia.hotelbooking.booking.client.HotelClient;
 import com.kseniia.hotelbooking.booking.entity.Booking;
+import com.kseniia.hotelbooking.booking.entity.BookingRequestStatus;
 import com.kseniia.hotelbooking.booking.entity.BookingStatus;
 import com.kseniia.hotelbooking.booking.repository.BookingRepository;
 import org.springframework.http.HttpStatus;
@@ -29,8 +30,10 @@ public class BookingReconciliationWorker {
             return false;
         }
 
-        hotelClient.release(booking.getRoomId(), bookingId, "");
-        booking.cancel();
+        if (booking.getRoomId() != null) {
+            hotelClient.release(booking.getRoomId(), bookingId, "");
+        }
+        booking.failRequest(BookingRequestStatus.HOTEL_UNAVAILABLE, true);
         return true;
     }
 }

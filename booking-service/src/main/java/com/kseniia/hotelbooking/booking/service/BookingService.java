@@ -5,27 +5,38 @@ import com.kseniia.hotelbooking.booking.client.RoomCandidate;
 import com.kseniia.hotelbooking.booking.dto.AdminRoomBookingResponse;
 import com.kseniia.hotelbooking.booking.dto.BookingResponse;
 import com.kseniia.hotelbooking.booking.dto.CreateBookingRequest;
+import com.kseniia.hotelbooking.booking.entity.BookingRequestStatus;
 import com.kseniia.hotelbooking.booking.entity.BookingStatus;
+import com.kseniia.hotelbooking.booking.exception.HotelServiceUnavailableException;
 import com.kseniia.hotelbooking.booking.exception.RoomUnavailableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Duration;
 import java.util.List;
 
 @Service
 public class BookingService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(BookingService.class);
+    private static final long IDEMPOTENCY_POLL_MILLIS = 25;
 
     private final BookingStateService bookingStateService;
     private final HotelClient hotelClient;
+    private final Duration idempotencyWaitTimeout;
 
-    public BookingService(BookingStateService bookingStateService, HotelClient hotelClient) {
+    public BookingService(
+            BookingStateService bookingStateService,
+            HotelClient hotelClient,
+            @Value("${booking.idempotency-wait-timeout}") Duration idempotencyWaitTimeout
+    ) {
         this.bookingStateService = bookingStateService;
         this.hotelClient = hotelClient;
+        this.idempotencyWaitTimeout = idempotencyWaitTimeout;
     }
 
     public BookingResponse create(
@@ -34,20 +45,47 @@ public class BookingService {
             String authorization
     ) {
         validate(request);
-        List<Long> roomIds = request.autoSelect()
-                ? recommendedRoomIds(authorization)
-                : List.of(request.roomId());
-        BookingResponse pending = bookingStateService.createPending(
+        Long requestedRoomId = request.autoSelect() ? null : request.roomId();
+        BookingStateService.PendingBookingResult existing = bookingStateService.findByRequest(
                 userId,
-                roomIds.getFirst(),
+                request.requestId(),
+                request.autoSelect(),
+                requestedRoomId,
                 request.startDate(),
                 request.endDate()
         );
+        if (existing != null) {
+            return replay(existing, userId, request.requestId());
+        }
+        Long initialRoomId = request.autoSelect() ? null : request.roomId();
+        BookingStateService.PendingBookingResult pendingResult = bookingStateService.createPending(
+                userId,
+                request.requestId(),
+                request.autoSelect(),
+                requestedRoomId,
+                initialRoomId,
+                request.startDate(),
+                request.endDate()
+        );
+        BookingResponse pending = pendingResult.booking();
+        if (!pendingResult.created()) {
+            return replay(pendingResult, userId, request.requestId());
+        }
 
         if (request.autoSelect()) {
+            List<Long> roomIds;
+            try {
+                roomIds = recommendedRoomIds(authorization);
+            } catch (RoomUnavailableException exception) {
+                bookingStateService.failRequest(pending.id(), BookingRequestStatus.ROOM_UNAVAILABLE, true);
+                throw exception;
+            } catch (RuntimeException exception) {
+                bookingStateService.failRequest(pending.id(), BookingRequestStatus.HOTEL_UNAVAILABLE, true);
+                throw asHotelUnavailable(exception);
+            }
             return confirmFirstAvailable(pending.id(), roomIds, request, authorization);
         }
-        return confirmSelectedRoom(pending.id(), roomIds.getFirst(), request, authorization);
+        return confirmSelectedRoom(pending.id(), initialRoomId, request, authorization);
     }
 
     private BookingResponse confirmFirstAvailable(
@@ -57,17 +95,22 @@ public class BookingService {
             String authorization
     ) {
         for (Long roomId : roomIds) {
-            bookingStateService.assignRoom(bookingId, roomId);
+            try {
+                bookingStateService.assignRoom(bookingId, roomId);
+            } catch (RuntimeException exception) {
+                bookingStateService.failRequest(bookingId, BookingRequestStatus.HOTEL_UNAVAILABLE, true);
+                throw asHotelUnavailable(exception);
+            }
             try {
                 return confirm(bookingId, roomId, request, authorization);
             } catch (RoomUnavailableException exception) {
                 LOGGER.info("Room {} is unavailable for booking {}, trying next candidate", roomId, bookingId);
             } catch (RuntimeException exception) {
-                handleFailure(roomId, bookingId, authorization);
-                throw exception;
+                handleFailure(roomId, bookingId, authorization, exception);
+                throw asHotelUnavailable(exception);
             }
         }
-        bookingStateService.cancel(bookingId);
+        bookingStateService.failRequest(bookingId, BookingRequestStatus.ROOM_UNAVAILABLE, true);
         throw new RoomUnavailableException();
     }
 
@@ -80,8 +123,11 @@ public class BookingService {
         try {
             return confirm(bookingId, roomId, request, authorization);
         } catch (RuntimeException exception) {
-            handleFailure(roomId, bookingId, authorization);
-            throw exception;
+            handleFailure(roomId, bookingId, authorization, exception);
+            if (exception instanceof RoomUnavailableException roomUnavailableException) {
+                throw roomUnavailableException;
+            }
+            throw asHotelUnavailable(exception);
         }
     }
 
@@ -103,13 +149,57 @@ public class BookingService {
         return confirmed;
     }
 
-    private void handleFailure(Long roomId, Long bookingId, String authorization) {
-        if (compensate(roomId, bookingId, authorization)) {
-            bookingStateService.cancel(bookingId);
+    private void handleFailure(
+            Long roomId,
+            Long bookingId,
+            String authorization,
+            RuntimeException exception
+    ) {
+        BookingRequestStatus requestStatus = exception instanceof RoomUnavailableException
+                ? BookingRequestStatus.ROOM_UNAVAILABLE
+                : BookingRequestStatus.HOTEL_UNAVAILABLE;
+        boolean compensated = compensate(roomId, bookingId, authorization);
+        bookingStateService.failRequest(bookingId, requestStatus, compensated);
+        if (compensated) {
             LOGGER.warn("Booking {} transitioned PENDING -> CANCELLED", bookingId);
         } else {
             LOGGER.error("Booking {} remains PENDING for compensation retry", bookingId);
         }
+    }
+
+    private BookingResponse replay(
+            BookingStateService.PendingBookingResult result,
+            Long userId,
+            String requestId
+    ) {
+        if (result.requestStatus() == BookingRequestStatus.PROCESSING) {
+            result = awaitTerminalResult(userId, requestId);
+        }
+        return switch (result.requestStatus()) {
+            case SUCCEEDED -> result.booking();
+            case ROOM_UNAVAILABLE -> throw new RoomUnavailableException();
+            case HOTEL_UNAVAILABLE -> throw new HotelServiceUnavailableException();
+            case PROCESSING -> throw new HotelServiceUnavailableException();
+        };
+    }
+
+    private BookingStateService.PendingBookingResult awaitTerminalResult(Long userId, String requestId) {
+        long deadline = System.nanoTime() + idempotencyWaitTimeout.toNanos();
+        BookingStateService.PendingBookingResult result;
+        do {
+            try {
+                Thread.sleep(IDEMPOTENCY_POLL_MILLIS);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new HotelServiceUnavailableException(exception);
+            }
+            result = bookingStateService.findByRequestId(userId, requestId);
+            if (result == null) {
+                throw new HotelServiceUnavailableException();
+            }
+        } while (result.requestStatus() == BookingRequestStatus.PROCESSING
+                && System.nanoTime() < deadline);
+        return result;
     }
 
     public List<BookingResponse> getHistory(Long userId) {
@@ -125,7 +215,9 @@ public class BookingService {
         if (booking.status() == BookingStatus.CANCELLED) {
             return;
         }
-        hotelClient.release(booking.roomId(), bookingId, authorization);
+        if (booking.roomId() != null) {
+            hotelClient.release(booking.roomId(), bookingId, authorization);
+        }
         bookingStateService.cancel(bookingId, userId);
         LOGGER.info("Booking {} transitioned {} -> CANCELLED", bookingId, booking.status());
     }
@@ -164,5 +256,12 @@ public class BookingService {
             LOGGER.error("Failed to release room hold for booking {}", bookingId, compensationFailure);
             return false;
         }
+    }
+
+    private HotelServiceUnavailableException asHotelUnavailable(RuntimeException exception) {
+        if (exception instanceof HotelServiceUnavailableException hotelServiceUnavailableException) {
+            return hotelServiceUnavailableException;
+        }
+        return new HotelServiceUnavailableException(exception);
     }
 }
