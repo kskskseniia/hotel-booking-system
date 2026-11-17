@@ -1,7 +1,7 @@
 package com.kseniia.hotelbooking.hotel.dto;
 
 public record HotelResponse(
-        Long id,
+        Long hotelId,
         String name,
         String address
 ) {

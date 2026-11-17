@@ -4,6 +4,8 @@ param(
     [ValidateSet("eureka-server", "api-gateway", "booking-service", "hotel-service")]
     [string]$Service,
 
+    [switch]$Demo,
+
     [switch]$ValidateOnly
 )
 
@@ -64,8 +66,20 @@ if ($Service -eq "booking-service" -and $env:ADMIN_BOOTSTRAP_ENABLED -eq "true")
     }
 }
 
+if ($Demo) {
+    if ($Service -notin @("booking-service", "hotel-service")) {
+        throw "The -Demo switch is supported only for booking-service and hotel-service."
+    }
+    [Environment]::SetEnvironmentVariable("SPRING_PROFILES_ACTIVE", "demo", "Process")
+}
+
 if ($ValidateOnly) {
-    Write-Host "Environment configuration is valid for $Service."
+    $profile = if ([string]::IsNullOrWhiteSpace($env:SPRING_PROFILES_ACTIVE)) {
+        "default"
+    } else {
+        $env:SPRING_PROFILES_ACTIVE
+    }
+    Write-Host "Environment configuration is valid for $Service (profile: $profile)."
     exit 0
 }
 

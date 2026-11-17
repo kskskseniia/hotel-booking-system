@@ -3,6 +3,7 @@ package com.kseniia.hotelbooking.booking.controller;
 import com.kseniia.hotelbooking.booking.dto.CredentialsRequest;
 import com.kseniia.hotelbooking.booking.dto.TokenResponse;
 import com.kseniia.hotelbooking.booking.service.UserAuthenticationService;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,11 +23,19 @@ public class UserAuthenticationController {
     }
 
     @PostMapping("/register")
+    @Operation(
+            summary = "Регистрация пользователя",
+            description = "Создаёт новую учётную запись с ролью USER и возвращает JWT-токен."
+    )
     public ResponseEntity<TokenResponse> register(@Valid @RequestBody CredentialsRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(authenticationService.register(request));
     }
 
     @PostMapping("/auth")
+    @Operation(
+            summary = "Вход в систему",
+            description = "Проверяет логин и пароль существующего пользователя и возвращает JWT-токен."
+    )
     public ResponseEntity<TokenResponse> authenticate(@Valid @RequestBody CredentialsRequest request) {
         return ResponseEntity.ok(authenticationService.authenticate(request));
     }

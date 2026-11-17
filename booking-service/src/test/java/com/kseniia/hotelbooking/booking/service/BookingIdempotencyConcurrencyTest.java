@@ -67,7 +67,7 @@ class BookingIdempotencyConcurrencyTest {
         BookingStateService.PendingBookingResult firstResult = first.get(5, TimeUnit.SECONDS);
         BookingStateService.PendingBookingResult secondResult = second.get(5, TimeUnit.SECONDS);
 
-        assertThat(firstResult.booking().id()).isEqualTo(secondResult.booking().id());
+        assertThat(firstResult.booking().bookingId()).isEqualTo(secondResult.booking().bookingId());
         assertThat(List.of(firstResult.created(), secondResult.created()))
                 .containsExactlyInAnyOrder(true, false);
         assertThat(bookingRepository.count()).isOne();

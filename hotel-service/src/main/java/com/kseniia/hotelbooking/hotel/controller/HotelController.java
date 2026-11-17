@@ -3,6 +3,7 @@ package com.kseniia.hotelbooking.hotel.controller;
 import com.kseniia.hotelbooking.hotel.dto.CreateHotelRequest;
 import com.kseniia.hotelbooking.hotel.dto.HotelResponse;
 import com.kseniia.hotelbooking.hotel.service.HotelService;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +28,10 @@ public class HotelController {
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
+    @Operation(
+            summary = "Создание отеля",
+            description = "Добавляет новый отель. Доступно только администратору."
+    )
     public ResponseEntity<HotelResponse> createHotel(@Valid @RequestBody CreateHotelRequest request) {
         HotelResponse hotel = hotelService.createHotel(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(hotel);
@@ -34,6 +39,10 @@ public class HotelController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @Operation(
+            summary = "Список отелей",
+            description = "Возвращает все зарегистрированные отели пользователю или администратору."
+    )
     public List<HotelResponse> getHotels() {
         return hotelService.getHotels();
     }

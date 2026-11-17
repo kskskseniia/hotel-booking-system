@@ -100,7 +100,8 @@ class BookingControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request(false, 42L)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").isNumber())
+                .andExpect(jsonPath("$.bookingId").isNumber())
+                .andExpect(jsonPath("$.id").doesNotExist())
                 .andExpect(jsonPath("$.roomId").value(42))
                 .andExpect(jsonPath("$.startDate").value("2099-07-10"))
                 .andExpect(jsonPath("$.endDate").value("2099-07-12"))
@@ -137,7 +138,7 @@ class BookingControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value(firstBooking.getId()))
+                .andExpect(jsonPath("$.bookingId").value(firstBooking.getId()))
                 .andExpect(jsonPath("$.status").value("CONFIRMED"));
 
         assertThat(bookingRepository.count()).isOne();
@@ -191,8 +192,10 @@ class BookingControllerTest {
             MvcResult secondResult = second.get(5, TimeUnit.SECONDS);
             assertThat(firstResult.getResponse().getStatus()).isEqualTo(201);
             assertThat(secondResult.getResponse().getStatus()).isEqualTo(201);
-            assertThat(objectMapper.readTree(firstResult.getResponse().getContentAsString()).get("id").asLong())
-                    .isEqualTo(objectMapper.readTree(secondResult.getResponse().getContentAsString()).get("id").asLong());
+            assertThat(objectMapper.readTree(firstResult.getResponse().getContentAsString())
+                    .get("bookingId").asLong())
+                    .isEqualTo(objectMapper.readTree(secondResult.getResponse().getContentAsString())
+                            .get("bookingId").asLong());
             assertThat(objectMapper.readTree(secondResult.getResponse().getContentAsString()).get("status").asText())
                     .isEqualTo("CONFIRMED");
             verify(hotelClient, times(1)).confirmAvailability(
@@ -275,8 +278,9 @@ class BookingControllerTest {
                 .andReturn();
 
         assertThat(bookingRepository.count()).isEqualTo(2);
-        assertThat(objectMapper.readTree(first.getResponse().getContentAsString()).get("id").asLong())
-                .isNotEqualTo(objectMapper.readTree(second.getResponse().getContentAsString()).get("id").asLong());
+        assertThat(objectMapper.readTree(first.getResponse().getContentAsString()).get("bookingId").asLong())
+                .isNotEqualTo(objectMapper.readTree(second.getResponse().getContentAsString())
+                        .get("bookingId").asLong());
         verify(hotelClient, times(2)).confirmAvailability(
                 eq(42L), any(), eq(START_DATE), eq(END_DATE), any()
         );
@@ -392,7 +396,7 @@ class BookingControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value(booking.getId()))
+                .andExpect(jsonPath("$.bookingId").value(booking.getId()))
                 .andExpect(jsonPath("$.status").value("CONFIRMED"));
 
         verifyNoInteractions(hotelClient);
@@ -584,7 +588,8 @@ class BookingControllerTest {
         mockMvc.perform(get("/booking/{id}", booking.getId())
                         .header(AUTHORIZATION, bearer(user)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(booking.getId()))
+                .andExpect(jsonPath("$.bookingId").value(booking.getId()))
+                .andExpect(jsonPath("$.id").doesNotExist())
                 .andExpect(jsonPath("$.roomId").value(42))
                 .andExpect(jsonPath("$.startDate").value("2099-07-10"))
                 .andExpect(jsonPath("$.endDate").value("2099-07-12"))
@@ -786,6 +791,8 @@ class BookingControllerTest {
                         .header(AUTHORIZATION, bearer(admin)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].bookingId").isNumber())
+                .andExpect(jsonPath("$[0].id").doesNotExist())
                 .andExpect(jsonPath("$[0].userId").value(anotherUser.getId()))
                 .andExpect(jsonPath("$[0].roomId").value(42))
                 .andExpect(jsonPath("$[0].startDate").value("2099-01-10"))

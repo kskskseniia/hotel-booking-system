@@ -32,6 +32,8 @@ public class UserAdministrationController {
 
     @PostMapping
     @Operation(
+            summary = "Создание пользователя администратором",
+            description = "Создаёт учётную запись USER или ADMIN. Доступно только администратору.",
             security = @SecurityRequirement(name = "bearerAuth"),
             responses = @ApiResponse(responseCode = "201", description = "User created")
     )
@@ -41,6 +43,8 @@ public class UserAdministrationController {
 
     @PatchMapping
     @Operation(
+            summary = "Изменение пользователя",
+            description = "Изменяет имя и роль существующего пользователя. Доступно только администратору.",
             security = @SecurityRequirement(name = "bearerAuth"),
             responses = @ApiResponse(responseCode = "200", description = "User updated")
     )
@@ -50,6 +54,8 @@ public class UserAdministrationController {
 
     @DeleteMapping
     @Operation(
+            summary = "Удаление пользователя",
+            description = "Освобождает занятые пользователем номера и удаляет пользователя вместе с историей бронирований. Незавершённая бронь блокирует удаление.",
             security = @SecurityRequirement(name = "bearerAuth"),
             responses = {
                     @ApiResponse(responseCode = "204", description = "User and bookings deleted"),

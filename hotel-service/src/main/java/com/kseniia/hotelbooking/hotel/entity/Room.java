@@ -41,6 +41,13 @@ public class Room {
         this.number = number;
     }
 
+    public Room(Hotel hotel, String number, boolean available, long timesBooked) {
+        this.hotel = hotel;
+        this.number = number;
+        this.available = available;
+        this.timesBooked = timesBooked;
+    }
+
     public Long getId() {
         return id;
     }

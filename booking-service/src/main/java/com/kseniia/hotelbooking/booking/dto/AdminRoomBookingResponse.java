@@ -6,7 +6,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public record AdminRoomBookingResponse(
-        Long id,
+        Long bookingId,
         Long userId,
         Long roomId,
         LocalDate startDate,

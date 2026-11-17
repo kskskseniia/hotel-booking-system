@@ -97,7 +97,8 @@ class UserAdministrationHttpTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).isNotNull();
         JsonNode responseBody = objectMapper.readTree(response.getBody());
-        assertThat(responseBody.get("id").asLong()).isPositive();
+        assertThat(responseBody.get("userId").asLong()).isPositive();
+        assertThat(responseBody.has("id")).isFalse();
         assertThat(responseBody.get("username").asText()).isEqualTo("manager");
         assertThat(responseBody.get("role").asText()).isEqualTo("USER");
         assertThat(responseBody.has("password")).isFalse();
@@ -130,7 +131,8 @@ class UserAdministrationHttpTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         JsonNode responseBody = objectMapper.readTree(response.getBody());
-        assertThat(responseBody.get("id").asLong()).isEqualTo(target.getId());
+        assertThat(responseBody.get("userId").asLong()).isEqualTo(target.getId());
+        assertThat(responseBody.has("id")).isFalse();
         assertThat(responseBody.get("username").asText()).isEqualTo("role-target");
         assertThat(responseBody.get("role").asText()).isEqualTo("ADMIN");
         assertThat(responseBody.has("password")).isFalse();

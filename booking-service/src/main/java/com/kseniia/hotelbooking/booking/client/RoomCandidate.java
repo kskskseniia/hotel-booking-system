@@ -1,4 +1,4 @@
 package com.kseniia.hotelbooking.booking.client;
 
-public record RoomCandidate(Long id) {
+public record RoomCandidate(Long roomId) {
 }

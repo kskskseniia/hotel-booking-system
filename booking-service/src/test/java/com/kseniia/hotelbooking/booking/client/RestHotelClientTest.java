@@ -57,6 +57,18 @@ class RestHotelClientTest {
     }
 
     @Test
+    void readsRoomIdsFromRecommendations() {
+        responseStatus = 200;
+        responseBody = """
+                [{"roomId":42,"hotelId":7,"number":"101","available":true,"timesBooked":0}]
+                """;
+
+        assertThat(client().getRecommendedRooms("Bearer booking-token"))
+                .extracting(RoomCandidate::roomId)
+                .containsExactly(42L);
+    }
+
+    @Test
     void confirmsAvailabilityWithBookingCorrelationDataAndServiceJwt() {
         client().confirmAvailability(
                 42L,

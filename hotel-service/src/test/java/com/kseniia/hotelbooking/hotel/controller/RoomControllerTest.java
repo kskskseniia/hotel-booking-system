@@ -71,7 +71,8 @@ class RoomControllerTest {
                                 }
                                 """.formatted(hotel.getId())))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").isNumber())
+                .andExpect(jsonPath("$.roomId").isNumber())
+                .andExpect(jsonPath("$.id").doesNotExist())
                 .andExpect(jsonPath("$.hotelId").value(hotel.getId()))
                 .andExpect(jsonPath("$.number").value("101"))
                 .andExpect(jsonPath("$.available").value(true))
@@ -154,6 +155,8 @@ class RoomControllerTest {
         mockMvc.perform(get("/api/rooms").with(user()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].roomId").isNumber())
+                .andExpect(jsonPath("$[0].id").doesNotExist())
                 .andExpect(jsonPath("$[0].hotelId").value(hotel.getId()))
                 .andExpect(jsonPath("$[0].number").value("101"))
                 .andExpect(jsonPath("$[0].available").value(true))

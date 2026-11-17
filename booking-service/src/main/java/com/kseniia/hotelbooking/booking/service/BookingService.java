@@ -77,15 +77,15 @@ public class BookingService {
             try {
                 roomIds = recommendedRoomIds(authorization);
             } catch (RoomUnavailableException exception) {
-                bookingStateService.failRequest(pending.id(), BookingRequestStatus.ROOM_UNAVAILABLE, true);
+                bookingStateService.failRequest(pending.bookingId(), BookingRequestStatus.ROOM_UNAVAILABLE, true);
                 throw exception;
             } catch (RuntimeException exception) {
-                bookingStateService.failRequest(pending.id(), BookingRequestStatus.HOTEL_UNAVAILABLE, true);
+                bookingStateService.failRequest(pending.bookingId(), BookingRequestStatus.HOTEL_UNAVAILABLE, true);
                 throw asHotelUnavailable(exception);
             }
-            return confirmFirstAvailable(pending.id(), roomIds, request, authorization);
+            return confirmFirstAvailable(pending.bookingId(), roomIds, request, authorization);
         }
-        return confirmSelectedRoom(pending.id(), initialRoomId, request, authorization);
+        return confirmSelectedRoom(pending.bookingId(), initialRoomId, request, authorization);
     }
 
     private BookingResponse confirmFirstAvailable(
@@ -237,7 +237,7 @@ public class BookingService {
 
     private List<Long> recommendedRoomIds(String authorization) {
         List<Long> roomIds = hotelClient.getRecommendedRooms(authorization).stream()
-                .map(RoomCandidate::id)
+                .map(RoomCandidate::roomId)
                 .filter(java.util.Objects::nonNull)
                 .distinct()
                 .toList();

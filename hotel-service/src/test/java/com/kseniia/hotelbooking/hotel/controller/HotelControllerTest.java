@@ -51,7 +51,8 @@ class HotelControllerTest {
                                 }
                                 """))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").isNumber())
+                .andExpect(jsonPath("$.hotelId").isNumber())
+                .andExpect(jsonPath("$.id").doesNotExist())
                 .andExpect(jsonPath("$.name").value("Aurora"))
                 .andExpect(jsonPath("$.address").value("1 Central Street"));
 
@@ -76,7 +77,8 @@ class HotelControllerTest {
                                 }
                                 """.formatted(longName, longAddress)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").isNumber())
+                .andExpect(jsonPath("$.hotelId").isNumber())
+                .andExpect(jsonPath("$.id").doesNotExist())
                 .andExpect(jsonPath("$.name").value(longName))
                 .andExpect(jsonPath("$.address").value(longAddress));
 
@@ -110,9 +112,9 @@ class HotelControllerTest {
         mockMvc.perform(get("/api/hotels").with(user()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[?(@.id == %d && @.name == 'Aurora' && @.address == '1 Central Street')]"
+                .andExpect(jsonPath("$[?(@.hotelId == %d && @.name == 'Aurora' && @.address == '1 Central Street')]"
                         .formatted(aurora.getId()), hasSize(1)))
-                .andExpect(jsonPath("$[?(@.id == %d && @.name == 'Baltic' && @.address == '2 River Road')]"
+                .andExpect(jsonPath("$[?(@.hotelId == %d && @.name == 'Baltic' && @.address == '2 River Road')]"
                         .formatted(baltic.getId()), hasSize(1)));
     }
 
