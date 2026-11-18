@@ -1,5 +1,7 @@
 package com.kseniia.hotelbooking.booking.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kseniia.hotelbooking.booking.service.UserAuthenticationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,19 +29,28 @@ class UserAuthenticationUnexpectedFailureHttpTest {
     @Autowired
     private TestRestTemplate restTemplate;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
     @MockitoBean
     private UserAuthenticationService authenticationService;
 
     @Test
-    void unexpectedPublicAuthenticationFailureReturnsInternalServerError() {
+    void unexpectedPublicAuthenticationFailureReturnsInternalServerError() throws Exception {
         when(authenticationService.register(any())).thenThrow(new IllegalStateException("test failure"));
 
-        HttpStatus status = HttpStatus.valueOf(restTemplate.postForEntity(
+        var response = restTemplate.postForEntity(
                 "/user/register",
                 Map.of("username", "alice", "password", "strong-password"),
                 String.class
-        ).getStatusCode().value());
+        );
 
-        assertThat(status).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        JsonNode error = objectMapper.readTree(response.getBody());
+        assertThat(error.path("status").asInt()).isEqualTo(500);
+        assertThat(error.path("error").asText()).isEqualTo("Internal Server Error");
+        assertThat(error.path("message").asText()).isEqualTo("Internal server error");
+        assertThat(error.path("path").asText()).isEqualTo("/user/register");
+        assertThat(response.getBody()).doesNotContain("test failure");
     }
 }

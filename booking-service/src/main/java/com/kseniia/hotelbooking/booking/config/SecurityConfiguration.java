@@ -1,5 +1,6 @@
 package com.kseniia.hotelbooking.booking.config;
 
+import com.kseniia.hotelbooking.booking.exception.SecurityErrorResponseWriter;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.OctetSequenceKey;
@@ -75,11 +76,25 @@ public class SecurityConfiguration {
     @Bean
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            JwtAuthenticationConverter jwtAuthenticationConverter
+            JwtAuthenticationConverter jwtAuthenticationConverter,
+            SecurityErrorResponseWriter errorWriter
     ) throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint((request, response, exception) -> errorWriter.write(
+                                request,
+                                response,
+                                org.springframework.http.HttpStatus.UNAUTHORIZED,
+                                "Authentication is required"
+                        ))
+                        .accessDeniedHandler((request, response, exception) -> errorWriter.write(
+                                request,
+                                response,
+                                org.springframework.http.HttpStatus.FORBIDDEN,
+                                "Access is denied"
+                        )))
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(

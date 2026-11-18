@@ -99,7 +99,12 @@ class RoomControllerTest {
                                   "number": "101"
                                 }
                                 """))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.error").value("Not Found"))
+                .andExpect(jsonPath("$.message").value("Hotel not found"))
+                .andExpect(jsonPath("$.path").value("/api/rooms"))
+                .andExpect(jsonPath("$.timestamp").isNotEmpty());
 
         Long roomCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM rooms", Long.class);
         assertThat(roomCount).isZero();

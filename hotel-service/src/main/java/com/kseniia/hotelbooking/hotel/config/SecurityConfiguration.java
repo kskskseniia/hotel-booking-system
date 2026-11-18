@@ -1,5 +1,6 @@
 package com.kseniia.hotelbooking.hotel.config;
 
+import com.kseniia.hotelbooking.hotel.exception.SecurityErrorResponseWriter;
 import jakarta.servlet.DispatcherType;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -29,10 +30,26 @@ public class SecurityConfiguration {
     private static final String JWT_ISSUER = "booking-service";
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            SecurityErrorResponseWriter errorWriter
+    ) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint((request, response, exception) -> errorWriter.write(
+                                request,
+                                response,
+                                org.springframework.http.HttpStatus.UNAUTHORIZED,
+                                "Authentication is required"
+                        ))
+                        .accessDeniedHandler((request, response, exception) -> errorWriter.write(
+                                request,
+                                response,
+                                org.springframework.http.HttpStatus.FORBIDDEN,
+                                "Access is denied"
+                        )))
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()

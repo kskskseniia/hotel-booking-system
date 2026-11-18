@@ -1,5 +1,7 @@
 package com.kseniia.hotelbooking.booking.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kseniia.hotelbooking.booking.dto.TokenResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,6 +40,9 @@ class UserAuthenticationHttpTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
     @BeforeEach
     void cleanDatabase() {
         jdbcTemplate.update("DELETE FROM bookings");
@@ -45,7 +50,7 @@ class UserAuthenticationHttpTest {
     }
 
     @Test
-    void duplicateRegistrationReturnsConflictOverRealHttp() {
+    void duplicateRegistrationReturnsConflictOverRealHttp() throws Exception {
         Map<String, String> request = Map.of(
                 "username", "alice",
                 "password", "strong-password"
@@ -64,6 +69,13 @@ class UserAuthenticationHttpTest {
 
         assertThat(firstResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(duplicateResponse.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        JsonNode error = objectMapper.readTree(duplicateResponse.getBody());
+        assertThat(error.path("timestamp").asText()).isNotBlank();
+        assertThat(error.path("status").asInt()).isEqualTo(409);
+        assertThat(error.path("error").asText()).isEqualTo("Conflict");
+        assertThat(error.path("message").asText()).isEqualTo("Username already exists");
+        assertThat(error.path("path").asText()).isEqualTo("/user/register");
+        assertThat(duplicateResponse.getBody()).doesNotContain("strong-password");
     }
 
     @Test
@@ -79,7 +91,7 @@ class UserAuthenticationHttpTest {
     }
 
     @Test
-    void malformedJsonReturnsBadRequestOverRealHttp() {
+    void malformedJsonReturnsBadRequestOverRealHttp() throws Exception {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
@@ -90,6 +102,12 @@ class UserAuthenticationHttpTest {
         );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        JsonNode error = objectMapper.readTree(response.getBody());
+        assertThat(error.path("status").asInt()).isEqualTo(400);
+        assertThat(error.path("error").asText()).isEqualTo("Bad Request");
+        assertThat(error.path("message").asText()).isEqualTo("Malformed JSON request");
+        assertThat(error.path("path").asText()).isEqualTo("/user/register");
+        assertThat(error.path("timestamp").asText()).isNotBlank();
     }
 
     @Test

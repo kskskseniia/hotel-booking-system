@@ -56,6 +56,29 @@ Booking Service -------------> Hotel Service
 6. При отмене Booking Service просит Hotel Service освободить номер и сохраняет
    бронь в истории со статусом `CANCELLED`.
 
+## Формат ошибок
+
+Booking Service, Hotel Service и собственные ошибки API Gateway возвращают один
+JSON-формат:
+
+```json
+{
+  "timestamp": "2026-11-17T20:00:00Z",
+  "status": 409,
+  "error": "Conflict",
+  "message": "Username already exists",
+  "path": "/user/register"
+}
+```
+
+- `timestamp` — время возникновения ошибки в UTC;
+- `status` и `error` — код и стандартное название HTTP-статуса;
+- `message` — безопасное описание без паролей и внутренних деталей;
+- `path` — путь исходного запроса.
+
+Swagger обоих бизнес-сервисов показывает эту модель как `ErrorResponse` для
+документированных ответов `4xx` и `5xx`.
+
 ## Запуск в VS Code / PowerShell
 
 Eureka Server и API Gateway запускаются как обычно, а для двух бизнес-сервисов

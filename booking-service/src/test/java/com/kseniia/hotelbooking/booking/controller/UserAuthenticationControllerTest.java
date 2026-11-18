@@ -17,7 +17,9 @@ import org.springframework.test.web.servlet.MvcResult;
 import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -150,7 +152,12 @@ class UserAuthenticationControllerTest {
         mockMvc.perform(post("/user/auth")
                         .contentType("application/json")
                         .content(credentials("alice", "wrong-password")))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.error").value("Unauthorized"))
+                .andExpect(jsonPath("$.message").value("Invalid username or password"))
+                .andExpect(jsonPath("$.path").value("/user/auth"))
+                .andExpect(jsonPath("$.timestamp").isNotEmpty());
     }
 
     @Test
@@ -159,6 +166,27 @@ class UserAuthenticationControllerTest {
                         .contentType("application/json")
                         .content(credentials("unknown", "wrong-password")))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void preservesMethodNotAllowedStatusAndHeader() throws Exception {
+        mockMvc.perform(get("/user/register"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(header().string("Allow", "POST"))
+                .andExpect(jsonPath("$.status").value(405))
+                .andExpect(jsonPath("$.error").value("Method Not Allowed"))
+                .andExpect(jsonPath("$.path").value("/user/register"));
+    }
+
+    @Test
+    void preservesUnsupportedMediaTypeStatus() throws Exception {
+        mockMvc.perform(post("/user/register")
+                        .contentType("text/plain")
+                        .content("not-json"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.status").value(415))
+                .andExpect(jsonPath("$.error").value("Unsupported Media Type"))
+                .andExpect(jsonPath("$.path").value("/user/register"));
     }
 
     private String credentials(String username, String password) {

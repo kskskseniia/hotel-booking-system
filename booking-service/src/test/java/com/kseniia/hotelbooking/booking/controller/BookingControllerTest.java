@@ -46,9 +46,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
+import static org.springframework.http.HttpHeaders.WWW_AUTHENTICATE;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -331,7 +333,12 @@ class BookingControllerTest {
                         .header(AUTHORIZATION, authorization)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request(false, 42L)))
-                .andExpect(status().isServiceUnavailable());
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.status").value(503))
+                .andExpect(jsonPath("$.error").value("Service Unavailable"))
+                .andExpect(jsonPath("$.message").value("Hotel service is unavailable"))
+                .andExpect(jsonPath("$.path").value("/booking"))
+                .andExpect(jsonPath("$.timestamp").isNotEmpty());
 
         Booking booking = bookingRepository.findAll().getFirst();
         assertThat(booking.getStatus()).isEqualTo(BookingStatus.PENDING);
@@ -799,6 +806,18 @@ class BookingControllerTest {
                 .andExpect(jsonPath("$[1].userId").value(user.getId()))
                 .andExpect(jsonPath("$[1].roomId").value(42))
                 .andExpect(jsonPath("$[1].startDate").value("2099-02-10"));
+    }
+
+    @Test
+    void unauthenticatedRequestReturnsBearerChallengeAndErrorBody() throws Exception {
+        mockMvc.perform(post("/booking")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request(false, 42L)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string(WWW_AUTHENTICATE, "Bearer"))
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.error").value("Unauthorized"))
+                .andExpect(jsonPath("$.path").value("/booking"));
     }
 
     private String request(boolean autoSelect, Long roomId) throws Exception {

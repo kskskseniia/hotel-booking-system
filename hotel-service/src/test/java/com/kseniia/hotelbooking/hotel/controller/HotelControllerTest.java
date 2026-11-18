@@ -13,10 +13,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -99,7 +102,12 @@ class HotelControllerTest {
                                   "address": ""
                                 }
                                 """))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").isNotEmpty())
+                .andExpect(jsonPath("$.path").value("/api/hotels"))
+                .andExpect(jsonPath("$.timestamp").isNotEmpty());
 
         assertThat(hotelRepository.count()).isZero();
     }
@@ -116,6 +124,27 @@ class HotelControllerTest {
                         .formatted(aurora.getId()), hasSize(1)))
                 .andExpect(jsonPath("$[?(@.hotelId == %d && @.name == 'Baltic' && @.address == '2 River Road')]"
                         .formatted(baltic.getId()), hasSize(1)));
+    }
+
+    @Test
+    void preservesMethodNotAllowedStatusAndHeader() throws Exception {
+        mockMvc.perform(delete("/api/hotels").with(admin()))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(header().string("Allow", containsString("GET")))
+                .andExpect(header().string("Allow", containsString("POST")))
+                .andExpect(jsonPath("$.status").value(405))
+                .andExpect(jsonPath("$.error").value("Method Not Allowed"));
+    }
+
+    @Test
+    void preservesUnsupportedMediaTypeStatus() throws Exception {
+        mockMvc.perform(post("/api/hotels")
+                        .with(admin())
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .content("not-json"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.status").value(415))
+                .andExpect(jsonPath("$.error").value("Unsupported Media Type"));
     }
 
     private RequestPostProcessor admin() {

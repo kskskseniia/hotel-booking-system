@@ -53,6 +53,16 @@ class OpenApiDocumentationTest {
                 .andExpect(jsonPath("$.paths['/user'].delete.responses['404']").exists())
                 .andExpect(jsonPath("$.paths['/user'].delete.responses['409']").exists())
                 .andExpect(jsonPath("$.paths['/user'].delete.responses['503']").exists())
+                .andExpect(jsonPath("$.paths['/user'].delete.responses['409'].content['application/json'].schema['$ref']")
+                        .value("#/components/schemas/ErrorResponse"))
+                .andExpect(jsonPath("$.paths['/booking'].post.responses['400'].content['application/json'].schema['$ref']")
+                        .value("#/components/schemas/ErrorResponse"))
+                .andExpect(jsonPath("$.paths['/booking'].post.responses['401'].content['application/json'].schema['$ref']")
+                        .value("#/components/schemas/ErrorResponse"))
+                .andExpect(jsonPath("$.paths['/booking'].post.responses['403'].content['application/json'].schema['$ref']")
+                        .value("#/components/schemas/ErrorResponse"))
+                .andExpect(jsonPath("$.paths['/booking'].post.responses['500'].content['application/json'].schema['$ref']")
+                        .value("#/components/schemas/ErrorResponse"))
                 .andExpect(jsonPath("$.paths['/booking'].post.security[0].bearerAuth").exists())
                 .andExpect(jsonPath("$.paths['/booking'].post.responses['201']").exists())
                 .andExpect(jsonPath("$.paths['/booking/{bookingId}'].get.security[0].bearerAuth").exists())
@@ -64,7 +74,13 @@ class OpenApiDocumentationTest {
                 .andExpect(jsonPath("$.paths['/bookings/rooms/{roomId}'].get.security[0].bearerAuth").exists())
                 .andExpect(jsonPath("$.paths['/bookings/rooms/{roomId}'].get.responses['200']").exists())
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.type").value("http"))
-                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"));
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"))
+                .andExpect(jsonPath("$.components.schemas.ErrorResponse.required").isArray())
+                .andExpect(jsonPath("$.components.schemas.ErrorResponse.properties.timestamp").exists())
+                .andExpect(jsonPath("$.components.schemas.ErrorResponse.properties.status").exists())
+                .andExpect(jsonPath("$.components.schemas.ErrorResponse.properties.error").exists())
+                .andExpect(jsonPath("$.components.schemas.ErrorResponse.properties.message").exists())
+                .andExpect(jsonPath("$.components.schemas.ErrorResponse.properties.path").exists());
     }
 
     @Test
