@@ -211,14 +211,19 @@ public class BookingService {
     }
 
     public void cancel(Long bookingId, Long userId, String authorization) {
-        BookingResponse booking = bookingStateService.get(bookingId, userId);
+        BookingResponse booking = bookingStateService.beginCancellation(bookingId, userId);
         if (booking.status() == BookingStatus.CANCELLED) {
             return;
         }
-        if (booking.roomId() != null) {
-            hotelClient.release(booking.roomId(), bookingId, authorization);
+        try {
+            if (booking.roomId() != null) {
+                hotelClient.release(booking.roomId(), bookingId, authorization);
+            }
+            bookingStateService.completeCancellation(bookingId, userId);
+        } catch (RuntimeException exception) {
+            bookingStateService.abortCancellation(bookingId, userId);
+            throw exception;
         }
-        bookingStateService.cancel(bookingId, userId);
         LOGGER.info("Booking {} transitioned {} -> CANCELLED", bookingId, booking.status());
     }
 

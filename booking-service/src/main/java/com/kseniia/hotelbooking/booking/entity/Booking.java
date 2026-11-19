@@ -66,6 +66,9 @@ public class Booking {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "cancellation_requests", nullable = false)
+    private int cancellationRequests;
+
     protected Booking() {
     }
 
@@ -164,17 +167,29 @@ public class Booking {
 
     public void cancel() {
         status = BookingStatus.CANCELLED;
+        cancellationRequests = 0;
+    }
+
+    public void requestCancellation() {
+        cancellationRequests++;
+    }
+
+    public void abortCancellation() {
+        if (cancellationRequests > 0) {
+            cancellationRequests--;
+        }
     }
 
     public void failRequest(BookingRequestStatus requestStatus, boolean cancelBooking) {
         this.requestStatus = requestStatus;
         if (cancelBooking) {
             status = BookingStatus.CANCELLED;
+            cancellationRequests = 0;
         }
     }
 
     private void requirePending() {
-        if (status != BookingStatus.PENDING) {
+        if (status != BookingStatus.PENDING || cancellationRequests > 0) {
             throw new IllegalStateException("Booking is no longer pending");
         }
     }

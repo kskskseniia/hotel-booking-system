@@ -110,12 +110,27 @@ public class BookingStateService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void cancel(Long bookingId, Long userId) {
+    public BookingResponse beginCancellation(Long bookingId, Long userId) {
         Booking booking = findForUpdate(bookingId);
-        if (!booking.getUser().getId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found");
+        requireOwner(booking, userId);
+        if (booking.getStatus() != BookingStatus.CANCELLED) {
+            booking.requestCancellation();
         }
+        return toResponse(booking);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void completeCancellation(Long bookingId, Long userId) {
+        Booking booking = findForUpdate(bookingId);
+        requireOwner(booking, userId);
         booking.cancel();
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void abortCancellation(Long bookingId, Long userId) {
+        Booking booking = findForUpdate(bookingId);
+        requireOwner(booking, userId);
+        booking.abortCancellation();
     }
 
     @Transactional(readOnly = true)
@@ -142,6 +157,12 @@ public class BookingStateService {
     private Booking findForUpdate(Long bookingId) {
         return bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
+    }
+
+    private void requireOwner(Booking booking, Long userId) {
+        if (!booking.getUser().getId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found");
+        }
     }
 
     private void validateRequest(

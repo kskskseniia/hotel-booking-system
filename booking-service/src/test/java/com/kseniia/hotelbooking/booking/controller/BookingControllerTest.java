@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kseniia.hotelbooking.booking.client.HotelClient;
 import com.kseniia.hotelbooking.booking.client.RoomCandidate;
 import com.kseniia.hotelbooking.booking.entity.Booking;
+import com.kseniia.hotelbooking.booking.entity.BookingRequestStatus;
 import com.kseniia.hotelbooking.booking.entity.BookingStatus;
 import com.kseniia.hotelbooking.booking.entity.User;
 import com.kseniia.hotelbooking.booking.entity.UserRole;
@@ -319,6 +320,25 @@ class BookingControllerTest {
                 authorization
         );
         verify(hotelClient, times(1)).release(42L, booking.getId(), authorization);
+    }
+
+    @Test
+    void cancelsBookingWhenHotelUnavailableAndCompensationSucceeds() throws Exception {
+        String authorization = bearer(user);
+        HotelServiceUnavailableException failure = new HotelServiceUnavailableException(new RuntimeException("down"));
+        doThrow(failure).when(hotelClient)
+                .confirmAvailability(eq(42L), any(), eq(START_DATE), eq(END_DATE), any());
+
+        mockMvc.perform(post("/booking")
+                        .header(AUTHORIZATION, authorization)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request(false, 42L)))
+                .andExpect(status().isServiceUnavailable());
+
+        Booking booking = bookingRepository.findAll().getFirst();
+        assertThat(booking.getStatus()).isEqualTo(BookingStatus.CANCELLED);
+        assertThat(booking.getRequestStatus()).isEqualTo(BookingRequestStatus.HOTEL_UNAVAILABLE);
+        verify(hotelClient).release(42L, booking.getId(), authorization);
     }
 
     @Test

@@ -124,10 +124,14 @@ public class RestHotelClient implements HotelClient {
 
     private void pause(int attempt) {
         try {
-            Thread.sleep(retryBackoff.multipliedBy(attempt).toMillis());
+            Thread.sleep(retryDelay(retryBackoff, attempt).toMillis());
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new HotelServiceUnavailableException(exception);
         }
+    }
+
+    static Duration retryDelay(Duration baseDelay, int attempt) {
+        return baseDelay.multipliedBy(attempt);
     }
 }

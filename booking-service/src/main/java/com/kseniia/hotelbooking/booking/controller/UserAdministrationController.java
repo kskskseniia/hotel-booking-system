@@ -44,9 +44,15 @@ public class UserAdministrationController {
     @PatchMapping
     @Operation(
             summary = "Изменение пользователя",
-            description = "Изменяет имя и роль существующего пользователя. Доступно только администратору.",
+            description = "Изменяет роль пользователя, найденного по имени. Доступно только администратору.",
             security = @SecurityRequirement(name = "bearerAuth"),
-            responses = @ApiResponse(responseCode = "200", description = "User updated")
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "User role updated"),
+                    @ApiResponse(responseCode = "400", description = "Invalid request"),
+                    @ApiResponse(responseCode = "401", description = "Authentication required"),
+                    @ApiResponse(responseCode = "403", description = "Administrator role required"),
+                    @ApiResponse(responseCode = "404", description = "User not found")
+            }
     )
     public UserResponse update(@Valid @RequestBody UpdateUserRequest request) {
         return userAdministrationService.update(request);
