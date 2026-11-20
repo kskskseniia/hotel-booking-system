@@ -42,6 +42,9 @@ class ApiGatewayApplicationTest {
                 "hotel-service-list-rooms",
                 "hotel-service-recommend-rooms",
                 "hotel-service-room-item",
+                "booking-service-register-user",
+                "booking-service-authenticate-user",
+                "booking-service-admin-users",
                 "booking-service-create",
                 "booking-service-history",
                 "booking-service-room-history",
@@ -52,6 +55,9 @@ class ApiGatewayApplicationTest {
         assertThat(routes.get("hotel-service-list-rooms").getUri().toString()).isEqualTo("lb://hotel-service");
         assertThat(routes.get("hotel-service-recommend-rooms").getUri().toString()).isEqualTo("lb://hotel-service");
         assertThat(routes.get("hotel-service-room-item").getUri().toString()).isEqualTo("lb://hotel-service");
+        assertThat(routes.get("booking-service-register-user").getUri().toString()).isEqualTo("lb://booking-service");
+        assertThat(routes.get("booking-service-authenticate-user").getUri().toString()).isEqualTo("lb://booking-service");
+        assertThat(routes.get("booking-service-admin-users").getUri().toString()).isEqualTo("lb://booking-service");
         assertThat(routes.get("booking-service-create").getUri().toString()).isEqualTo("lb://booking-service");
         assertThat(routes.get("booking-service-history").getUri().toString()).isEqualTo("lb://booking-service");
         assertThat(routes.get("booking-service-room-history").getUri().toString()).isEqualTo("lb://booking-service");
@@ -75,6 +81,27 @@ class ApiGatewayApplicationTest {
                 .containsExactly("/api/rooms/{id}");
         assertThat(predicateValues(routes.get("hotel-service-room-item"), "Method"))
                 .containsExactly("PUT", "DELETE");
+        assertRoute(
+                routes.get("booking-service-register-user"),
+                "/api/bookings/user/register",
+                "POST",
+                "/user/register"
+        );
+        assertRoute(
+                routes.get("booking-service-authenticate-user"),
+                "/api/bookings/user/auth",
+                "POST",
+                "/user/auth"
+        );
+        assertThat(pathPatterns(routes.get("booking-service-admin-users")))
+                .containsExactly("/api/bookings/user");
+        assertThat(predicateValues(routes.get("booking-service-admin-users"), "Method"))
+                .containsExactly("POST", "PATCH", "DELETE");
+        assertThat(routes.get("booking-service-admin-users").getFilters())
+                .anySatisfy(filter -> {
+                    assertThat(filter.getName()).isEqualTo("SetPath");
+                    assertThat(filter.getArgs()).containsValue("/user");
+                });
         assertRoute(routes.get("booking-service-create"), "/api/bookings", "POST", "/booking");
         assertRoute(routes.get("booking-service-history"), "/api/bookings", "GET", "/bookings");
         assertRoute(

@@ -30,6 +30,27 @@ spring:
               predicates:
                 - Path=/api/rooms/{id}
                 - Method=PUT,DELETE
+            - id: booking-service-register-user
+              uri: lb://booking-service
+              predicates:
+                - Path=/api/bookings/user/register
+                - Method=POST
+              filters:
+                - SetPath=/user/register
+            - id: booking-service-authenticate-user
+              uri: lb://booking-service
+              predicates:
+                - Path=/api/bookings/user/auth
+                - Method=POST
+              filters:
+                - SetPath=/user/auth
+            - id: booking-service-admin-users
+              uri: lb://booking-service
+              predicates:
+                - Path=/api/bookings/user
+                - Method=POST,PATCH,DELETE
+              filters:
+                - SetPath=/user
             - id: booking-service-create
               uri: lb://booking-service
               predicates:
