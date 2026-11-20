@@ -4,6 +4,7 @@ import com.kseniia.hotelbooking.hotel.dto.CreateRoomRequest;
 import com.kseniia.hotelbooking.hotel.dto.ConfirmRoomAvailabilityRequest;
 import com.kseniia.hotelbooking.hotel.dto.RoomResponse;
 import com.kseniia.hotelbooking.hotel.dto.ReleaseRoomRequest;
+import com.kseniia.hotelbooking.hotel.dto.UpdateRoomRequest;
 import com.kseniia.hotelbooking.hotel.entity.Hotel;
 import com.kseniia.hotelbooking.hotel.entity.Room;
 import com.kseniia.hotelbooking.hotel.entity.RoomHold;
@@ -39,7 +40,7 @@ public class RoomService {
 
     @Transactional
     public RoomResponse createRoom(CreateRoomRequest request) {
-        Hotel hotel = hotelRepository.findById(request.hotelId())
+        Hotel hotel = hotelRepository.findByIdForUpdate(request.hotelId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Hotel not found"));
         Room room = roomRepository.save(new Room(hotel, request.number()));
         return toResponse(room);
@@ -57,6 +58,26 @@ public class RoomService {
         return roomRepository.findAllByAvailableTrueOrderByTimesBookedAscIdAsc().stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional
+    public RoomResponse updateRoom(Long roomId, UpdateRoomRequest request) {
+        Room room = roomRepository.findByIdForUpdate(roomId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Room not found"));
+        Hotel hotel = hotelRepository.findByIdForUpdate(request.hotelId())
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Hotel not found"));
+        room.update(hotel, request.number(), request.available());
+        return toResponse(room);
+    }
+
+    @Transactional
+    public void deleteRoom(Long roomId) {
+        Room room = roomRepository.findByIdForUpdate(roomId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Room not found"));
+        if (roomHoldRepository.existsByRoomId(roomId)) {
+            throw new ResponseStatusException(CONFLICT, "Room still has an active hold");
+        }
+        roomRepository.delete(room);
     }
 
     @Transactional

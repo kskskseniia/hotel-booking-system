@@ -1,7 +1,9 @@
 package com.kseniia.hotelbooking.hotel.controller;
 
 import com.kseniia.hotelbooking.hotel.entity.Hotel;
+import com.kseniia.hotelbooking.hotel.entity.Room;
 import com.kseniia.hotelbooking.hotel.repository.HotelRepository;
+import com.kseniia.hotelbooking.hotel.repository.RoomRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +21,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -37,8 +40,12 @@ class HotelControllerTest {
     @Autowired
     private HotelRepository hotelRepository;
 
+    @Autowired
+    private RoomRepository roomRepository;
+
     @BeforeEach
     void clearHotels() {
+        roomRepository.deleteAll();
         hotelRepository.deleteAll();
     }
 
@@ -89,6 +96,97 @@ class HotelControllerTest {
                 .singleElement()
                 .extracting(Hotel::getName, Hotel::getAddress)
                 .containsExactly(longName, longAddress);
+    }
+
+    @Test
+    void updatesHotel() throws Exception {
+        Hotel hotel = hotelRepository.save(new Hotel("Aurora", "1 Central Street"));
+
+        mockMvc.perform(put("/api/hotels/{id}", hotel.getId())
+                        .with(admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Aurora Premium",
+                                  "address": "2 Central Street"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hotelId").value(hotel.getId()))
+                .andExpect(jsonPath("$.name").value("Aurora Premium"))
+                .andExpect(jsonPath("$.address").value("2 Central Street"));
+
+        assertThat(hotelRepository.findById(hotel.getId()))
+                .get()
+                .extracting(Hotel::getName, Hotel::getAddress)
+                .containsExactly("Aurora Premium", "2 Central Street");
+    }
+
+    @Test
+    void rejectsInvalidHotelUpdateWithoutChangingHotel() throws Exception {
+        Hotel hotel = hotelRepository.save(new Hotel("Aurora", "1 Central Street"));
+
+        mockMvc.perform(put("/api/hotels/{id}", hotel.getId())
+                        .with(admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": " ",
+                                  "address": ""
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+
+        assertThat(hotelRepository.findById(hotel.getId()))
+                .get()
+                .extracting(Hotel::getName, Hotel::getAddress)
+                .containsExactly("Aurora", "1 Central Street");
+    }
+
+    @Test
+    void rejectsUpdatingUnknownHotel() throws Exception {
+        mockMvc.perform(put("/api/hotels/{id}", 999999)
+                        .with(admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Aurora",
+                                  "address": "1 Central Street"
+                                }
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Hotel not found"));
+    }
+
+    @Test
+    void deletesHotelWithoutRooms() throws Exception {
+        Hotel hotel = hotelRepository.save(new Hotel("Aurora", "1 Central Street"));
+
+        mockMvc.perform(delete("/api/hotels/{id}", hotel.getId()).with(admin()))
+                .andExpect(status().isNoContent());
+
+        assertThat(hotelRepository.existsById(hotel.getId())).isFalse();
+    }
+
+    @Test
+    void rejectsDeletingUnknownHotel() throws Exception {
+        mockMvc.perform(delete("/api/hotels/{id}", 999999).with(admin()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Hotel not found"));
+    }
+
+    @Test
+    void rejectsDeletingHotelWithRooms() throws Exception {
+        Hotel hotel = hotelRepository.save(new Hotel("Aurora", "1 Central Street"));
+        Room room = roomRepository.save(new Room(hotel, "101"));
+
+        mockMvc.perform(delete("/api/hotels/{id}", hotel.getId()).with(admin()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.message").value("Hotel still has rooms"));
+
+        assertThat(hotelRepository.existsById(hotel.getId())).isTrue();
+        assertThat(roomRepository.existsById(room.getId())).isTrue();
     }
 
     @Test

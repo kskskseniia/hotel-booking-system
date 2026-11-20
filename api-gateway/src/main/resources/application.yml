@@ -25,6 +25,11 @@ spring:
               predicates:
                 - Path=/api/rooms/recommend
                 - Method=GET
+            - id: hotel-service-room-item
+              uri: lb://hotel-service
+              predicates:
+                - Path=/api/rooms/{id}
+                - Method=PUT,DELETE
             - id: booking-service-create
               uri: lb://booking-service
               predicates:

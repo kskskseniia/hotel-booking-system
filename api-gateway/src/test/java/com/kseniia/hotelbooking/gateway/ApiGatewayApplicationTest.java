@@ -41,6 +41,7 @@ class ApiGatewayApplicationTest {
                 "hotel-service-create-room",
                 "hotel-service-list-rooms",
                 "hotel-service-recommend-rooms",
+                "hotel-service-room-item",
                 "booking-service-create",
                 "booking-service-history",
                 "booking-service-room-history",
@@ -50,6 +51,7 @@ class ApiGatewayApplicationTest {
         assertThat(routes.get("hotel-service-create-room").getUri().toString()).isEqualTo("lb://hotel-service");
         assertThat(routes.get("hotel-service-list-rooms").getUri().toString()).isEqualTo("lb://hotel-service");
         assertThat(routes.get("hotel-service-recommend-rooms").getUri().toString()).isEqualTo("lb://hotel-service");
+        assertThat(routes.get("hotel-service-room-item").getUri().toString()).isEqualTo("lb://hotel-service");
         assertThat(routes.get("booking-service-create").getUri().toString()).isEqualTo("lb://booking-service");
         assertThat(routes.get("booking-service-history").getUri().toString()).isEqualTo("lb://booking-service");
         assertThat(routes.get("booking-service-room-history").getUri().toString()).isEqualTo("lb://booking-service");
@@ -69,6 +71,10 @@ class ApiGatewayApplicationTest {
                 .containsExactly("/api/rooms/recommend");
         assertThat(predicateValues(routes.get("hotel-service-recommend-rooms"), "Method"))
                 .containsExactly("GET");
+        assertThat(pathPatterns(routes.get("hotel-service-room-item")))
+                .containsExactly("/api/rooms/{id}");
+        assertThat(predicateValues(routes.get("hotel-service-room-item"), "Method"))
+                .containsExactly("PUT", "DELETE");
         assertRoute(routes.get("booking-service-create"), "/api/bookings", "POST", "/booking");
         assertRoute(routes.get("booking-service-history"), "/api/bookings", "GET", "/bookings");
         assertRoute(

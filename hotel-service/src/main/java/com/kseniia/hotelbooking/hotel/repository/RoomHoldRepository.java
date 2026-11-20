@@ -10,6 +10,8 @@ public interface RoomHoldRepository extends JpaRepository<RoomHold, Long> {
 
     Optional<RoomHold> findByBookingId(Long bookingId);
 
+    boolean existsByRoomId(Long roomId);
+
     boolean existsByRoomIdAndStartDateLessThanAndEndDateGreaterThan(
             Long roomId,
             LocalDate endDate,

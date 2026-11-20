@@ -18,8 +18,10 @@ import java.util.Base64;
 import java.util.Date;
 
 import static org.springframework.http.HttpHeaders.WWW_AUTHENTICATE;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -86,6 +88,73 @@ class HotelSecurityTest {
                                   "number": "101"
                                 }
                                 """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void userCannotUpdateOrDeleteHotelsAndRooms() throws Exception {
+        String authorization = "Bearer " + token("booking-service", "USER");
+
+        mockMvc.perform(put("/api/hotels/{id}", 1)
+                        .header("Authorization", authorization)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Aurora",
+                                  "address": "1 Central Street"
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(delete("/api/hotels/{id}", 1)
+                        .header("Authorization", authorization))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put("/api/rooms/{id}", 1)
+                        .header("Authorization", authorization)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "hotelId": 1,
+                                  "number": "101",
+                                  "available": true
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(delete("/api/rooms/{id}", 1)
+                        .header("Authorization", authorization))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void serviceCannotUpdateOrDeleteHotelsAndRooms() throws Exception {
+        String authorization = "Bearer " + token(
+                "booking-service", "booking-service", null, "SERVICE", 3_600);
+
+        mockMvc.perform(put("/api/hotels/{id}", 1)
+                        .header("Authorization", authorization)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Aurora",
+                                  "address": "1 Central Street"
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(delete("/api/hotels/{id}", 1)
+                        .header("Authorization", authorization))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put("/api/rooms/{id}", 1)
+                        .header("Authorization", authorization)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "hotelId": 1,
+                                  "number": "101",
+                                  "available": true
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(delete("/api/rooms/{id}", 1)
+                        .header("Authorization", authorization))
                 .andExpect(status().isForbidden());
     }
 

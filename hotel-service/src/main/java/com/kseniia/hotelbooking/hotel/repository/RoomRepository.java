@@ -16,6 +16,8 @@ public interface RoomRepository extends JpaRepository<Room, Long> {
 
     List<Room> findAllByAvailableTrueOrderByTimesBookedAscIdAsc();
 
+    boolean existsByHotelId(Long hotelId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT room FROM Room room WHERE room.id = :id")
     Optional<Room> findByIdForUpdate(@Param("id") Long id);

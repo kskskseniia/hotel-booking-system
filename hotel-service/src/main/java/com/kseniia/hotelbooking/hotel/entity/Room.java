@@ -68,6 +68,12 @@ public class Room {
         return timesBooked;
     }
 
+    public void update(Hotel hotel, String number, boolean available) {
+        this.hotel = hotel;
+        this.number = number;
+        this.available = available;
+    }
+
     public void incrementTimesBooked() {
         timesBooked++;
     }
