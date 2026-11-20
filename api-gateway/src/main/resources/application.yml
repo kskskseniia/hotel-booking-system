@@ -76,6 +76,7 @@ spring:
               uri: lb://booking-service
               predicates:
                 - Path=/api/bookings/{id}
+                - Method=GET,DELETE
               filters:
                 - SetPath=/booking/{id}
 

@@ -112,6 +112,8 @@ class ApiGatewayApplicationTest {
         );
         assertThat(pathPatterns(routes.get("booking-service-item")))
                 .containsExactly("/api/bookings/{id}");
+        assertThat(predicateValues(routes.get("booking-service-item"), "Method"))
+                .containsExactly("GET", "DELETE");
         assertThat(routes.get("booking-service-item").getFilters())
                 .anySatisfy(filter -> {
                     assertThat(filter.getName()).isEqualTo("SetPath");

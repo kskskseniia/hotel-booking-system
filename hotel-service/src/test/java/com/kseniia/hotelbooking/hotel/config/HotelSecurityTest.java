@@ -41,8 +41,10 @@ class HotelSecurityTest {
 
     @Test
     void rejectsUnauthenticatedApiRequest() throws Exception {
-        mockMvc.perform(get("/api/hotels"))
+        mockMvc.perform(get("/api/hotels")
+                        .header("X-Correlation-Id", "hotel-unauthorized-id"))
                 .andExpect(status().isUnauthorized())
+                .andExpect(header().string("X-Correlation-Id", "hotel-unauthorized-id"))
                 .andExpect(header().string(WWW_AUTHENTICATE, "Bearer"))
                 .andExpect(jsonPath("$.status").value(401))
                 .andExpect(jsonPath("$.error").value("Unauthorized"))
@@ -62,6 +64,7 @@ class HotelSecurityTest {
     void userCannotCreateHotel() throws Exception {
         mockMvc.perform(post("/api/hotels")
                         .header("Authorization", "Bearer " + token("booking-service", "USER"))
+                        .header("X-Correlation-Id", "hotel-forbidden-id")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -70,6 +73,7 @@ class HotelSecurityTest {
                                 }
                                 """))
                 .andExpect(status().isForbidden())
+                .andExpect(header().string("X-Correlation-Id", "hotel-forbidden-id"))
                 .andExpect(jsonPath("$.status").value(403))
                 .andExpect(jsonPath("$.error").value("Forbidden"))
                 .andExpect(jsonPath("$.message").value("Access is denied"))

@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
+@PreAuthorize("hasRole('USER')")
 public class BookingController {
 
     private final BookingService bookingService;
@@ -91,6 +93,7 @@ public class BookingController {
     }
 
     @GetMapping("/bookings/rooms/{roomId}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(
             summary = "История бронирований номера",
             description = "Возвращает администратору все бронирования указанного номера.",

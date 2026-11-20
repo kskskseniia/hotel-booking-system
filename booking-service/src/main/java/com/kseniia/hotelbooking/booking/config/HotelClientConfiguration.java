@@ -1,10 +1,13 @@
 package com.kseniia.hotelbooking.booking.config;
 
+import com.kseniia.hotelbooking.booking.web.CorrelationIdFilter;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 
 import java.net.http.HttpClient;
@@ -24,6 +27,14 @@ public class HotelClientConfiguration {
                 .build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
         requestFactory.setReadTimeout(readTimeout);
-        return RestClient.builder().requestFactory(requestFactory);
+        return RestClient.builder()
+                .requestFactory(requestFactory)
+                .requestInterceptor((request, body, execution) -> {
+                    String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
+                    if (StringUtils.hasText(correlationId)) {
+                        request.getHeaders().set(CorrelationIdFilter.HEADER_NAME, correlationId);
+                    }
+                    return execution.execute(request, body);
+                });
     }
 }

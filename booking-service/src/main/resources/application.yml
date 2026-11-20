@@ -32,3 +32,7 @@ admin:
     enabled: ${ADMIN_BOOTSTRAP_ENABLED:false}
     username: ${ADMIN_USERNAME:}
     password: ${ADMIN_PASSWORD:}
+
+logging:
+  pattern:
+    correlation: "[correlationId=%X{correlationId:-}]"
